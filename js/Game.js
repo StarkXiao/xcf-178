@@ -3,6 +3,7 @@ const GameState = {
   VEHICLE_SELECT: 'vehicleSelect',
   COUNTDOWN: 'countdown',
   RACING: 'racing',
+  PAUSED: 'paused',
   FINISHED: 'finished'
 };
 
@@ -152,6 +153,13 @@ class Game {
     this.countdownTimer = 0;
     this.raceTime = 0;
 
+    this._prevStateBeforePause = null;
+    this._savedCountdown = 3;
+    this._savedCountdownTimer = 0;
+    this._savedRaceTime = 0;
+    this.pauseMenuCursor = 0;
+    this.pauseMenuItemCount = 2;
+
     this.difficulty = 'normal';
     this.totalLaps = 3;
     this.lapIndex = 1;
@@ -269,6 +277,8 @@ class Game {
       const handleStart = (e) => {
         e.preventDefault();
 
+        if (this.state === GameState.PAUSED) return;
+
         const touch = e.touches ? e.touches[0] : e;
         if (!this.touchManager.validateTouch(key, touch)) return;
 
@@ -298,6 +308,8 @@ class Game {
       btn.addEventListener('mouseleave', handleEnd);
     });
 
+    this._setupPauseButton();
+
     this._createSettingsPanel();
     this._setupOrientationHint();
 
@@ -306,10 +318,71 @@ class Game {
         this._handleMenuClick(e);
       } else if (this.state === GameState.VEHICLE_SELECT) {
         this._handleVehicleSelectClick(e);
+      } else if (this.state === GameState.PAUSED) {
+        this._handlePauseClick(e);
       } else if (this.state === GameState.FINISHED) {
         this.startGame();
       }
     });
+  }
+
+  _setupPauseButton() {
+    const btn = document.getElementById('btn-pause');
+    if (!btn) return;
+
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (this.state === GameState.RACING || this.state === GameState.COUNTDOWN) {
+        this.pauseGame();
+      } else if (this.state === GameState.PAUSED) {
+        this.resumeGame();
+      }
+
+      this.touchManager.vibrate('menuSelect');
+    };
+
+    btn.addEventListener('touchstart', handleClick, { passive: false });
+    btn.addEventListener('mousedown', handleClick);
+  }
+
+  _handlePauseClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+    const centerX = this.canvas.width / 2;
+
+    const panelW = isPortrait ? Math.min(300 * uiScale, this.canvas.width * 0.8) : 360;
+    const panelH = isPortrait ? (200 + this.pauseMenuItemCount * 50) * uiScale : 220 + this.pauseMenuItemCount * 55;
+    const panelX = centerX - panelW / 2;
+    const panelY = (this.canvas.height - panelH) / 2;
+
+    const itemSpacing = isPortrait ? 48 * uiScale : 52;
+    const itemStartY = panelY + (isPortrait ? 100 : 110) * uiScale;
+    const itemH = isPortrait ? 40 * uiScale : 44;
+
+    for (let i = 0; i < this.pauseMenuItemCount; i++) {
+      const itemY = itemStartY + i * itemSpacing;
+      const itemX = panelX + 20 * uiScale;
+      const itemW = panelW - 40 * uiScale;
+
+      if (x >= itemX && x <= itemX + itemW &&
+          y >= itemY - itemH / 2 && y <= itemY + itemH / 2) {
+        this.pauseMenuCursor = i;
+        this.touchManager.vibrate('menuSelect');
+
+        if (i === 0) {
+          this.resumeGame();
+        } else if (i === 1) {
+          this.quitToMenu();
+        }
+        return;
+      }
+    }
   }
 
   _setupOrientationHint() {
@@ -533,6 +606,9 @@ class Game {
       case GameState.RACING:
         this._updateRacing(dt);
         break;
+      case GameState.PAUSED:
+        this._updatePaused();
+        break;
       case GameState.FINISHED:
         this._updateFinished();
         break;
@@ -730,6 +806,13 @@ class Game {
   startGame() {
     this._applySettings();
     this._resetRace();
+
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+
+    this._prevStateBeforePause = null;
     this.state = GameState.COUNTDOWN;
     this.countdown = 3;
     this.countdownTimer = 0;
@@ -782,6 +865,12 @@ class Game {
   }
 
   _updateCountdown(dt) {
+    if (this.input.isPause()) {
+      this.pauseGame();
+      this.input.clearJustPressed();
+      return;
+    }
+
     this.countdownTimer += dt;
 
     if (this.countdownTimer >= 1) {
@@ -801,6 +890,12 @@ class Game {
   }
 
   _updateRacing(dt) {
+    if (this.input.isPause()) {
+      this.pauseGame();
+      this.input.clearJustPressed();
+      return;
+    }
+
     this.raceTime += dt * 1000;
 
     if (!this.player.finished) {
@@ -922,6 +1017,92 @@ class Game {
     }
   }
 
+  _updatePaused() {
+    if (this.input.isMenuUp()) {
+      this.pauseMenuCursor = (this.pauseMenuCursor - 1 + this.pauseMenuItemCount) % this.pauseMenuItemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.pauseMenuCursor = (this.pauseMenuCursor + 1) % this.pauseMenuItemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuConfirm()) {
+      if (this.pauseMenuCursor === 0) {
+        this.resumeGame();
+      } else if (this.pauseMenuCursor === 1) {
+        this.quitToMenu();
+      }
+      this.input.clearJustPressed();
+    }
+
+    if (this.input.isPause()) {
+      this.resumeGame();
+      this.input.clearJustPressed();
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  togglePause() {
+    if (this.state === GameState.RACING || this.state === GameState.COUNTDOWN) {
+      this.pauseGame();
+    } else if (this.state === GameState.PAUSED) {
+      this.resumeGame();
+    }
+  }
+
+  pauseGame() {
+    if (this.state === GameState.PAUSED) return;
+
+    this._prevStateBeforePause = this.state;
+    this._savedCountdown = this.countdown;
+    this._savedCountdownTimer = this.countdownTimer;
+    this._savedRaceTime = this.raceTime;
+    this.pauseMenuCursor = 0;
+
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.add('paused');
+    }
+
+    this.state = GameState.PAUSED;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  resumeGame() {
+    if (this.state !== GameState.PAUSED) return;
+    if (!this._prevStateBeforePause) return;
+
+    this.countdown = this._savedCountdown;
+    this.countdownTimer = this._savedCountdownTimer;
+    this.raceTime = this._savedRaceTime;
+
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+
+    this.state = this._prevStateBeforePause;
+    this._prevStateBeforePause = null;
+
+    this.input.clearJustPressed();
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  quitToMenu() {
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+
+    this.state = GameState.MENU;
+    this.menuCursor = 4;
+    this._prevStateBeforePause = null;
+    this.input.reset();
+    this.touchManager.reset();
+  }
+
   getAllBikes() {
     return [this.player, ...this.aiBikes];
   }
@@ -965,6 +1146,9 @@ class Game {
       this.renderer.drawCountdown(this.countdown);
     } else if (this.state === GameState.RACING) {
       this.renderer.drawHUD(this);
+    } else if (this.state === GameState.PAUSED) {
+      this.renderer.drawHUD(this);
+      this.renderer.drawPauseOverlay(this);
     } else if (this.state === GameState.FINISHED) {
       this.renderer.drawFinished(this);
     }

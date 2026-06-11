@@ -179,6 +179,33 @@ html, body {
   }
 }
 
+.btn-pause {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border-color: #ffff00;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffff00;
+  box-shadow: 0 0 15px rgba(255, 255, 0, 0.5), inset 0 0 10px rgba(255, 255, 0, 0.2);
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.btn-pause .btn-icon {
+  font-size: 20px;
+}
+
+.btn-pause:active,
+.btn-pause.touch-active {
+  background: rgba(255, 255, 0, 0.3);
+  box-shadow: 0 0 25px rgba(255, 255, 0, 0.8), inset 0 0 15px rgba(255, 255, 0, 0.4);
+  transform: scale(0.92);
+  filter: brightness(1.5);
+}
+
 .btn-icon {
   font-size: 18px;
   line-height: 1;
@@ -543,6 +570,17 @@ html, body {
     height: 62px;
   }
 
+  .btn-pause {
+    width: 42px;
+    height: 42px;
+    top: 10px;
+    right: 12px;
+  }
+
+  .btn-pause .btn-icon {
+    font-size: 18px;
+  }
+
   .btn-icon {
     font-size: 16px;
   }
@@ -621,6 +659,17 @@ html, body {
 
 .touch-controls.fade-out {
   opacity: 0.3;
+}
+
+.touch-controls.paused .d-pad,
+.touch-controls.paused .action-pad {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.touch-controls.paused .btn-pause {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .safe-area-inset-bottom {

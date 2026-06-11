@@ -75,6 +75,10 @@ class Input {
     return this._consumeJustPressed('Space') || this._consumeJustPressed('Enter');
   }
 
+  isPause() {
+    return this._consumeJustPressed('Escape') || this._consumeJustPressed('KeyP');
+  }
+
   _consumeJustPressed(code) {
     if (this.keysJustPressed[code]) {
       this.keysJustPressed[code] = false;

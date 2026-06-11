@@ -2446,6 +2446,107 @@ class Renderer {
     ctx.restore();
   }
 
+  drawPauseOverlay(game) {
+    const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.85)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const panelW = isPortrait ? Math.min(300 * uiScale, this.width * 0.8) : 360;
+    const panelH = isPortrait ? (200 + game.pauseMenuItemCount * 50) * uiScale : 220 + game.pauseMenuItemCount * 55;
+    const panelX = (this.width - panelW) / 2;
+    const panelY = (this.height - panelH) / 2;
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 14 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2.5 * uiScale;
+    ctx.shadowBlur = 20 * uiScale;
+    ctx.shadowColor = '#00f5ff';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 14 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const titleSize = isPortrait ? 28 * uiScale : 32;
+    ctx.fillStyle = '#00f5ff';
+    ctx.shadowBlur = 15 * uiScale;
+    ctx.shadowColor = '#00f5ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('⏸ 游戏暂停', this.width / 2, panelY + 50 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const itemSpacing = isPortrait ? 48 * uiScale : 52;
+    const itemStartY = panelY + (isPortrait ? 100 : 110) * uiScale;
+    const itemH = isPortrait ? 40 * uiScale : 44;
+
+    const menuItems = [
+      { label: '继续游戏', desc: '返回比赛' },
+      { label: '返回主菜单', desc: '退出当前比赛' }
+    ];
+
+    menuItems.forEach((item, i) => {
+      const itemY = itemStartY + i * itemSpacing;
+      const isSelected = game.pauseMenuCursor === i;
+
+      if (isSelected) {
+        const bgGradient = ctx.createLinearGradient(panelX + 20, itemY - itemH / 2, panelX + panelW - 20, itemY - itemH / 2);
+        bgGradient.addColorStop(0, 'rgba(0, 245, 255, 0.1)');
+        bgGradient.addColorStop(0.5, 'rgba(0, 245, 255, 0.25)');
+        bgGradient.addColorStop(1, 'rgba(0, 245, 255, 0.1)');
+        ctx.fillStyle = bgGradient;
+        ctx.beginPath();
+        ctx.roundRect(panelX + 20 * uiScale, itemY - itemH / 2, panelW - 40 * uiScale, itemH, 8 * uiScale);
+        ctx.fill();
+
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 2 * uiScale;
+        ctx.shadowBlur = 12 * uiScale;
+        ctx.shadowColor = '#00f5ff';
+        ctx.beginPath();
+        ctx.roundRect(panelX + 20 * uiScale, itemY - itemH / 2, panelW - 40 * uiScale, itemH, 8 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const labelSize = isPortrait ? 16 * uiScale : 18;
+      ctx.fillStyle = isSelected ? '#ffffff' : '#aaa';
+      ctx.shadowBlur = isSelected ? 8 * uiScale : 0;
+      ctx.shadowColor = isSelected ? '#00f5ff' : 'transparent';
+      ctx.font = `bold ${labelSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(item.label, this.width / 2, itemY);
+      ctx.shadowBlur = 0;
+
+      if (isSelected) {
+        const arrowSize = isPortrait ? 14 * uiScale : 16;
+        ctx.fillStyle = '#00f5ff';
+        ctx.font = `${arrowSize}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText('▶', panelX + 30 * uiScale, itemY + 2);
+        ctx.textAlign = 'right';
+        ctx.fillText('◀', panelX + panelW - 30 * uiScale, itemY + 2);
+      }
+    });
+
+    const hintSize = isPortrait ? 10 * uiScale : 12;
+    ctx.fillStyle = '#666';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('按 ESC / P 继续  |  上下键选择  |  空格确认', this.width / 2, panelY + panelH - 20 * uiScale);
+
+    ctx.restore();
+  }
+
   drawFinished(game) {
     const ctx = this.ctx;
     const rankings = game.getRankings();
