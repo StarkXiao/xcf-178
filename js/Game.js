@@ -185,7 +185,10 @@ class Game {
 
   _updateRacing(dt) {
     this.raceTime += dt * 1000;
-    this.player.raceTime = this.raceTime;
+
+    if (!this.player.finished) {
+      this.player.raceTime = this.raceTime;
+    }
 
     const playerInput = {
       accel: this.input.isAccel(),
@@ -198,24 +201,25 @@ class Game {
     this.collision.checkTrackCollision(this.player);
     this.collision.updateCheckpoints(this.player);
 
-    this.aiBikes.forEach(ai => {
-      ai.update(dt, this.track, this.getAllBikes());
-      this.collision.checkTrackCollision(ai);
-      this.collision.updateCheckpoints(ai);
-      ai.raceTime = this.raceTime;
-    });
-
-    this.collision.checkAllBikeCollisions(this.getAllBikes());
-
     if (this.player.lap >= this.totalLaps && !this.player.finished) {
       this.player.finished = true;
+      this.player.raceTime = this.raceTime;
     }
 
     this.aiBikes.forEach(ai => {
+      if (!ai.finished) {
+        ai.raceTime = this.raceTime;
+      }
+      ai.update(dt, this.track, this.getAllBikes());
+      this.collision.checkTrackCollision(ai);
+      this.collision.updateCheckpoints(ai);
       if (ai.lap >= this.totalLaps && !ai.finished) {
         ai.finished = true;
+        ai.raceTime = this.raceTime;
       }
     });
+
+    this.collision.checkAllBikeCollisions(this.getAllBikes());
 
     const allFinished = this.getAllBikes().every(b => b.finished);
     if (allFinished || this.player.finished) {

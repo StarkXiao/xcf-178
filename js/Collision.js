@@ -61,17 +61,27 @@ class Collision {
   }
 
   updateCheckpoints(bike) {
-    const checkpoints = this.track.checkpoints;
-    const nextCheckpoint = checkpoints[bike.checkpoint];
+    const track = this.track;
+    const checkpoints = track.checkpoints;
+    const numCheckpoints = checkpoints.length;
 
-    const dist = Utils.distance(bike.x, bike.y, nextCheckpoint.x, nextCheckpoint.y);
+    const bikeTrackDist = bike.getDistanceAlongTrack(track);
+    const nextIdx = bike.checkpoint % numCheckpoints;
+    const nextCpDist = checkpoints[nextIdx].distance;
 
-    if (dist < 60) {
-      bike.checkpoint = (bike.checkpoint + 1) % checkpoints.length;
+    let progress = bikeTrackDist - nextCpDist;
+    if (progress > track.totalLength / 2) {
+      progress -= track.totalLength;
+    }
+    if (progress < -track.totalLength / 2) {
+      progress += track.totalLength;
+    }
 
-      if (bike.checkpoint === 0) {
+    if (progress > 0) {
+      if (nextIdx === numCheckpoints - 1) {
         this._completeLap(bike);
       }
+      bike.checkpoint = (bike.checkpoint + 1) % numCheckpoints;
     }
   }
 
@@ -88,16 +98,21 @@ class Collision {
   }
 
   getRankings(bikes) {
+    const totalLength = this.track.totalLength;
+
+    const getScore = (bike) => {
+      if (bike.finished) {
+        return Number.MAX_SAFE_INTEGER - bike.raceTime;
+      }
+      const dist = bike.getDistanceAlongTrack(this.track);
+      const checkpointProgress = bike.checkpoint / this.track.checkpoints.length;
+      return (bike.lap + checkpointProgress) * totalLength + dist;
+    };
+
     const ranked = [...bikes].sort((a, b) => {
-      if (a.finished && b.finished) return a.raceTime - b.raceTime;
-      if (a.finished) return -1;
-      if (b.finished) return 1;
-
-      if (a.lap !== b.lap) return b.lap - a.lap;
-
-      const distA = a.getDistanceAlongTrack(this.track);
-      const distB = b.getDistanceAlongTrack(this.track);
-      return distB - distA;
+      const scoreA = getScore(a);
+      const scoreB = getScore(b);
+      return scoreB - scoreA;
     });
 
     return ranked.map((bike, index) => ({
