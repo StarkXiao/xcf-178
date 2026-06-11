@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="极速霓虹 - 赛博朋克风格机车竞速游戏">
+  <title>极速霓虹 - Neon Racer</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="touch-controls" id="touchControls">
+      <div class="d-pad">
+        <button class="touch-btn btn-left" id="btn-left">
+          <span class="btn-icon">◀</span>
+        </button>
+        <button class="touch-btn btn-right" id="btn-right">
+          <span class="btn-icon">▶</span>
+        </button>
+      </div>
+      <div class="action-pad">
+        <button class="touch-btn btn-brake" id="btn-brake">
+          <span class="btn-icon">■</span>
+          <span class="btn-label">刹车</span>
+        </button>
+        <button class="touch-btn btn-accel" id="btn-accel">
+          <span class="btn-icon">▲</span>
+          <span class="btn-label">加速</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/Input.js"></script>
+  <script src="js/Track.js"></script>
+  <script src="js/Bike.js"></script>
+  <script src="js/AI.js"></script>
+  <script src="js/Collision.js"></script>
+  <script src="js/Renderer.js"></script>
+  <script src="js/Game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

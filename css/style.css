@@ -1,0 +1,157 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0a0a1a;
+  font-family: 'Courier New', monospace;
+}
+
+.game-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#gameCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.touch-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: none;
+  justify-content: space-between;
+  padding: 0 30px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.d-pad, .action-pad {
+  display: flex;
+  gap: 15px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 3px solid;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: all 0.1s ease;
+  font-family: 'Courier New', monospace;
+}
+
+.touch-btn:active {
+  transform: scale(0.9);
+  filter: brightness(1.5);
+}
+
+.btn-left, .btn-right {
+  border-color: #00f5ff;
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.5), inset 0 0 10px rgba(0, 245, 255, 0.2);
+}
+
+.btn-left:active, .btn-right:active {
+  background: rgba(0, 245, 255, 0.3);
+  box-shadow: 0 0 25px rgba(0, 245, 255, 0.8), inset 0 0 15px rgba(0, 245, 255, 0.4);
+}
+
+.btn-accel {
+  border-color: #00ff66;
+  box-shadow: 0 0 15px rgba(0, 255, 102, 0.5), inset 0 0 10px rgba(0, 255, 102, 0.2);
+  height: 90px;
+  width: 80px;
+  border-radius: 40px;
+}
+
+.btn-accel:active {
+  background: rgba(0, 255, 102, 0.3);
+  box-shadow: 0 0 25px rgba(0, 255, 102, 0.8), inset 0 0 15px rgba(0, 255, 102, 0.4);
+}
+
+.btn-brake {
+  border-color: #ff0066;
+  box-shadow: 0 0 15px rgba(255, 0, 102, 0.5), inset 0 0 10px rgba(255, 0, 102, 0.2);
+  height: 70px;
+  width: 80px;
+  border-radius: 35px;
+}
+
+.btn-brake:active {
+  background: rgba(255, 0, 102, 0.3);
+  box-shadow: 0 0 25px rgba(255, 0, 102, 0.8), inset 0 0 15px rgba(255, 0, 102, 0.4);
+}
+
+.btn-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.btn-label {
+  font-size: 10px;
+  margin-top: 3px;
+  opacity: 0.7;
+}
+
+.action-pad {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.d-pad {
+  align-items: flex-end;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+  }
+}
+
+@media (max-width: 600px) {
+  .touch-controls {
+    padding: 0 15px;
+    bottom: 15px;
+  }
+
+  .touch-btn {
+    width: 60px;
+    height: 60px;
+  }
+
+  .btn-accel {
+    width: 70px;
+    height: 80px;
+  }
+
+  .btn-brake {
+    width: 70px;
+    height: 60px;
+  }
+
+  .btn-icon {
+    font-size: 16px;
+  }
+}
