@@ -3,41 +3,56 @@ class AIBike extends Bike {
     super(x, y, angle, color, false);
 
     this.difficulty = difficulty;
-    this._setDifficultyParams();
 
-    this.lookAheadMin = 120;
-    this.lookAheadMax = 350;
     this.steerSmooth = 0;
     this.targetPoint = null;
     this.progressDistance = 0;
     this.correctionTimer = 0;
+
+    this._setDifficultyParams();
   }
 
   _setDifficultyParams() {
     switch (this.difficulty) {
       case 'easy':
-        this.maxSpeed = 250;
+        this.maxSpeed = 260;
         this.acceleration = 150;
         this.steerSpeed = 2.0;
-        this.aggression = 0.5;
+        this.aggression = 0.4;
+        this.lookAheadMin = 100;
+        this.lookAheadMax = 280;
         break;
       case 'medium':
-        this.maxSpeed = 285;
-        this.acceleration = 180;
+        this.maxSpeed = 295;
+        this.acceleration = 185;
         this.steerSpeed = 2.6;
-        this.aggression = 0.75;
+        this.aggression = 0.7;
+        this.lookAheadMin = 120;
+        this.lookAheadMax = 350;
         break;
       case 'hard':
-        this.maxSpeed = 310;
-        this.acceleration = 200;
+        this.maxSpeed = 320;
+        this.acceleration = 210;
         this.steerSpeed = 3.0;
-        this.aggression = 0.95;
+        this.aggression = 0.9;
+        this.lookAheadMin = 140;
+        this.lookAheadMax = 400;
+        break;
+      case 'hell':
+        this.maxSpeed = 345;
+        this.acceleration = 240;
+        this.steerSpeed = 3.3;
+        this.aggression = 1.0;
+        this.lookAheadMin = 160;
+        this.lookAheadMax = 450;
         break;
       default:
         this.maxSpeed = 280;
         this.acceleration = 170;
         this.steerSpeed = 2.5;
-        this.aggression = 0.75;
+        this.aggression = 0.7;
+        this.lookAheadMin = 120;
+        this.lookAheadMax = 350;
     }
   }
 

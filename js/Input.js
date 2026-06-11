@@ -1,6 +1,7 @@
 class Input {
   constructor() {
     this.keys = {};
+    this.keysJustPressed = {};
     this.touchControls = {
       left: false,
       right: false,
@@ -12,6 +13,9 @@ class Input {
 
   _initKeyboard() {
     window.addEventListener('keydown', (e) => {
+      if (!this.keys[e.code]) {
+        this.keysJustPressed[e.code] = true;
+      }
       this.keys[e.code] = true;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
@@ -43,6 +47,34 @@ class Input {
     return this.keys['Space'] || this.keys['Enter'];
   }
 
+  isMenuUp() {
+    return this._consumeJustPressed('ArrowUp') || this._consumeJustPressed('KeyW');
+  }
+
+  isMenuDown() {
+    return this._consumeJustPressed('ArrowDown') || this._consumeJustPressed('KeyS');
+  }
+
+  isMenuLeft() {
+    return this._consumeJustPressed('ArrowLeft') || this._consumeJustPressed('KeyA');
+  }
+
+  isMenuRight() {
+    return this._consumeJustPressed('ArrowRight') || this._consumeJustPressed('KeyD');
+  }
+
+  isMenuConfirm() {
+    return this._consumeJustPressed('Space') || this._consumeJustPressed('Enter');
+  }
+
+  _consumeJustPressed(code) {
+    if (this.keysJustPressed[code]) {
+      this.keysJustPressed[code] = false;
+      return true;
+    }
+    return false;
+  }
+
   setTouchControl(control, value) {
     if (control in this.touchControls) {
       this.touchControls[control] = value;
@@ -51,11 +83,16 @@ class Input {
 
   reset() {
     this.keys = {};
+    this.keysJustPressed = {};
     this.touchControls = {
       left: false,
       right: false,
       accel: false,
       brake: false
     };
+  }
+
+  clearJustPressed() {
+    this.keysJustPressed = {};
   }
 }

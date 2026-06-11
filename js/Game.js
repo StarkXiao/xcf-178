@@ -5,6 +5,55 @@ const GameState = {
   FINISHED: 'finished'
 };
 
+const DifficultySettings = {
+  easy: {
+    label: '简单',
+    color: '#00ff66',
+    aiCount: 2,
+    aiDifficulties: ['easy', 'easy'],
+    playerMaxSpeed: 340,
+    playerAcceleration: 230,
+    playerGridIndex: 0,
+    collisionDamage: 0.8,
+    offTrackFriction: 2.5
+  },
+  normal: {
+    label: '普通',
+    color: '#00f5ff',
+    aiCount: 3,
+    aiDifficulties: ['medium', 'medium', 'easy'],
+    playerMaxSpeed: 320,
+    playerAcceleration: 200,
+    playerGridIndex: 1,
+    collisionDamage: 0.7,
+    offTrackFriction: 3.5
+  },
+  hard: {
+    label: '困难',
+    color: '#ff6600',
+    aiCount: 3,
+    aiDifficulties: ['hard', 'medium', 'medium'],
+    playerMaxSpeed: 310,
+    playerAcceleration: 190,
+    playerGridIndex: 2,
+    collisionDamage: 0.6,
+    offTrackFriction: 4.5
+  },
+  hell: {
+    label: '地狱',
+    color: '#ff0044',
+    aiCount: 4,
+    aiDifficulties: ['hell', 'hard', 'hard', 'medium'],
+    playerMaxSpeed: 300,
+    playerAcceleration: 180,
+    playerGridIndex: 4,
+    collisionDamage: 0.5,
+    offTrackFriction: 5.5
+  }
+};
+
+const LapOptions = [1, 3, 5, 7, 10];
+
 class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -15,7 +64,12 @@ class Game {
     this.countdown = 3;
     this.countdownTimer = 0;
     this.raceTime = 0;
+
+    this.difficulty = 'normal';
     this.totalLaps = 3;
+    this.lapIndex = 1;
+    this.menuCursor = 0;
+    this.menuItemCount = 3;
 
     this.track = null;
     this.player = null;
@@ -32,36 +86,57 @@ class Game {
     this.track = new Track(200);
     this.collision = new Collision(this.track);
 
-    const startPositions = this.track.getStartPositions(4, 60);
+    const cfg = DifficultySettings[this.difficulty];
+    const totalBikes = cfg.aiCount + 1;
+    const startPositions = this.track.getStartPositions(totalBikes, 60);
 
     this.player = new Bike(
-      startPositions[0].x,
-      startPositions[0].y,
-      startPositions[0].angle,
+      startPositions[cfg.playerGridIndex].x,
+      startPositions[cfg.playerGridIndex].y,
+      startPositions[cfg.playerGridIndex].angle,
       '#00f5ff',
       true
     );
-
-    const aiColors = ['#ff00ff', '#ff6600', '#00ff66'];
-    const aiDifficulties = ['hard', 'medium', 'easy'];
+    this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.acceleration = cfg.playerAcceleration;
+    this.player.offTrackFriction = cfg.offTrackFriction;
+    this.collision.damageMultiplier = cfg.collisionDamage;
 
     this.aiBikes = [];
-    for (let i = 0; i < 3; i++) {
-      const pos = startPositions[i + 1];
-      const ai = new AIBike(
-        pos.x,
-        pos.y,
-        pos.angle,
-        aiColors[i],
-        aiDifficulties[i]
-      );
-      this.aiBikes.push(ai);
-    }
+    this._createAIBikes(startPositions, cfg);
+
+    this.aiBikes.forEach(ai => {
+      ai.offTrackFriction = cfg.offTrackFriction;
+    });
 
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
 
     this._setupTouchControls();
+  }
+
+  _createAIBikes(startPositions, cfg) {
+    const aiColors = ['#ff00ff', '#ff6600', '#00ff66', '#ffff00', '#ff0066'];
+    this.aiBikes = [];
+
+    const playerIdx = cfg.playerGridIndex;
+    let aiSlot = 0;
+
+    for (let i = 0; i < startPositions.length; i++) {
+      if (i === playerIdx) continue;
+      if (aiSlot >= cfg.aiCount) break;
+
+      const pos = startPositions[i];
+      const ai = new AIBike(
+        pos.x,
+        pos.y,
+        pos.angle,
+        aiColors[aiSlot % aiColors.length],
+        cfg.aiDifficulties[aiSlot]
+      );
+      this.aiBikes.push(ai);
+      aiSlot++;
+    }
   }
 
   _setupTouchControls() {
@@ -95,11 +170,60 @@ class Game {
       btn.addEventListener('mouseleave', handleEnd);
     });
 
-    this.canvas.addEventListener('click', () => {
-      if (this.state === GameState.MENU || this.state === GameState.FINISHED) {
+    this.canvas.addEventListener('click', (e) => {
+      if (this.state === GameState.MENU) {
+        this._handleMenuClick(e);
+      } else if (this.state === GameState.FINISHED) {
         this.startGame();
       }
     });
+  }
+
+  _handleMenuClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const centerX = this.canvas.width / 2;
+    const panelX = centerX - 200;
+    const panelY = this.canvas.height / 2 - 20;
+
+    const itemY0 = panelY + 75;
+    const itemY1 = panelY + 135;
+    const itemY2 = panelY + 210;
+
+    if (x >= panelX && x <= panelX + 400) {
+      if (y >= itemY0 && y < itemY0 + 50) {
+        this.menuCursor = 0;
+        if (x < centerX - 20) {
+          this._changeDifficulty(-1);
+        } else if (x > centerX + 20) {
+          this._changeDifficulty(1);
+        }
+      } else if (y >= itemY1 && y < itemY1 + 50) {
+        this.menuCursor = 1;
+        if (x < centerX - 20) {
+          this._changeLaps(-1);
+        } else if (x > centerX + 20) {
+          this._changeLaps(1);
+        }
+      } else if (y >= itemY2 && y < itemY2 + 50) {
+        this.menuCursor = 2;
+        this.startGame();
+      }
+    }
+  }
+
+  _changeDifficulty(dir) {
+    const keys = Object.keys(DifficultySettings);
+    let idx = keys.indexOf(this.difficulty) + dir;
+    idx = Utils.clamp(idx, 0, keys.length - 1);
+    this.difficulty = keys[idx];
+  }
+
+  _changeLaps(dir) {
+    this.lapIndex = Utils.clamp(this.lapIndex + dir, 0, LapOptions.length - 1);
+    this.totalLaps = LapOptions[this.lapIndex];
   }
 
   start() {
@@ -138,31 +262,66 @@ class Game {
   }
 
   _updateMenu() {
-    if (this.input.isStart()) {
+    if (this.input.isMenuUp()) {
+      this.menuCursor = (this.menuCursor - 1 + this.menuItemCount) % this.menuItemCount;
+    }
+    if (this.input.isMenuDown()) {
+      this.menuCursor = (this.menuCursor + 1) % this.menuItemCount;
+    }
+
+    if (this.menuCursor === 0) {
+      if (this.input.isMenuLeft()) this._changeDifficulty(-1);
+      if (this.input.isMenuRight()) this._changeDifficulty(1);
+    } else if (this.menuCursor === 1) {
+      if (this.input.isMenuLeft()) this._changeLaps(-1);
+      if (this.input.isMenuRight()) this._changeLaps(1);
+    }
+
+    if (this.menuCursor === 2 && this.input.isMenuConfirm()) {
       this.startGame();
     }
+
+    this.input.clearJustPressed();
   }
 
   startGame() {
+    this._applySettings();
     this._resetRace();
     this.state = GameState.COUNTDOWN;
     this.countdown = 3;
     this.countdownTimer = 0;
   }
 
+  _applySettings() {
+    const cfg = DifficultySettings[this.difficulty];
+    this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.acceleration = cfg.playerAcceleration;
+    this.player.offTrackFriction = cfg.offTrackFriction;
+    this.collision.damageMultiplier = cfg.collisionDamage;
+    this.totalLaps = LapOptions[this.lapIndex];
+  }
+
   _resetRace() {
-    const startPositions = this.track.getStartPositions(4, 60);
+    const cfg = DifficultySettings[this.difficulty];
+    const totalBikes = cfg.aiCount + 1;
+    const startPositions = this.track.getStartPositions(totalBikes, 60);
 
     this.player.reset(
-      startPositions[0].x,
-      startPositions[0].y,
-      startPositions[0].angle
+      startPositions[cfg.playerGridIndex].x,
+      startPositions[cfg.playerGridIndex].y,
+      startPositions[cfg.playerGridIndex].angle
     );
+    this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.acceleration = cfg.playerAcceleration;
+    this.player.offTrackFriction = cfg.offTrackFriction;
+    this.collision.damageMultiplier = cfg.collisionDamage;
 
-    for (let i = 0; i < this.aiBikes.length; i++) {
-      const pos = startPositions[i + 1];
-      this.aiBikes[i].reset(pos.x, pos.y, pos.angle);
-    }
+    this.aiBikes = [];
+    this._createAIBikes(startPositions, cfg);
+
+    this.aiBikes.forEach(ai => {
+      ai.offTrackFriction = cfg.offTrackFriction;
+    });
 
     this.raceTime = 0;
     this.renderer.camera.x = this.player.x;
@@ -230,8 +389,10 @@ class Game {
   }
 
   _updateFinished() {
-    if (this.input.isStart()) {
-      this.startGame();
+    if (this.input.isMenuConfirm()) {
+      this.state = GameState.MENU;
+      this.menuCursor = 2;
+      this.input.clearJustPressed();
     }
   }
 
@@ -247,7 +408,7 @@ class Game {
     this.renderer.clear();
 
     if (this.state === GameState.MENU) {
-      this.renderer.drawMenu();
+      this.renderer.drawMenu(this);
       return;
     }
 

@@ -256,9 +256,10 @@ class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     this._drawSpeedometer(game.player, padding, this.height - 120);
-    this._drawLapInfo(game.player, this.width - padding - 180, padding);
+    this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
     this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
     this._drawRankings(game.getRankings(), padding, padding);
+    this._drawDifficultyBadge(game.difficulty, this.width - padding - 180, padding + 95);
 
     ctx.restore();
   }
@@ -267,7 +268,6 @@ class Renderer {
     const ctx = this.ctx;
     const speed = Math.abs(player.speed);
     const speedRatio = speed / player.maxSpeed;
-    const maxSpeed = player.maxSpeed;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
@@ -309,12 +309,14 @@ class Renderer {
     ctx.fillRect(barX, barY, barWidth * speedRatio, barHeight);
   }
 
-  _drawLapInfo(player, x, y) {
+  _drawLapInfo(player, totalLaps, x, y) {
     const ctx = this.ctx;
+    const displayLap = Math.min(player.lap + 1, totalLaps);
+    const lapProgress = (player.lap + (player.checkpoint + 1) / 8) / totalLaps;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
-    ctx.roundRect(x, y, 180, 70, 10);
+    ctx.roundRect(x, y, 180, 80, 10);
     ctx.fill();
 
     ctx.strokeStyle = '#ff00ff';
@@ -322,18 +324,64 @@ class Renderer {
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#ff00ff';
     ctx.beginPath();
-    ctx.roundRect(x, y, 180, 70, 10);
+    ctx.roundRect(x, y, 180, 80, 10);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`LAP ${player.lap + 1} / 3`, x + 90, y + 35);
+    ctx.fillText(`LAP ${displayLap} / ${totalLaps}`, x + 90, y + 32);
 
     ctx.fillStyle = '#888';
-    ctx.font = '14px monospace';
-    ctx.fillText(`Checkpoint: ${player.checkpoint + 1}/8`, x + 90, y + 58);
+    ctx.font = '12px monospace';
+    ctx.fillText(`Checkpoint: ${player.checkpoint + 1}/8`, x + 90, y + 52);
+
+    const barWidth = 150;
+    const barHeight = 6;
+    const barX = x + 15;
+    const barY = y + 62;
+
+    ctx.fillStyle = '#333';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    const gradient = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
+    gradient.addColorStop(0, '#ff00ff');
+    gradient.addColorStop(1, '#00f5ff');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(barX, barY, barWidth * Math.min(lapProgress, 1), barHeight);
+  }
+
+  _drawDifficultyBadge(difficulty, x, y) {
+    const ctx = this.ctx;
+    const cfg = DifficultySettings[difficulty];
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 180, 36, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = cfg.color;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = cfg.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, 180, 36, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('难度', x + 12, y + 14);
+
+    ctx.fillStyle = cfg.color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = cfg.color;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(cfg.label, x + 90, y + 26);
+    ctx.shadowBlur = 0;
   }
 
   _drawTimer(time, x, y) {
@@ -407,37 +455,145 @@ class Renderer {
     });
   }
 
-  drawMenu() {
+  drawMenu(game) {
     const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    ctx.fillStyle = 'rgba(10, 10, 26, 0.9)';
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
     ctx.fillRect(0, 0, this.width, this.height);
 
     ctx.shadowBlur = 30;
     ctx.shadowColor = '#00f5ff';
     ctx.fillStyle = '#00f5ff';
-    ctx.font = 'bold 56px monospace';
+    ctx.font = 'bold 48px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('NEON RACER', this.width / 2, this.height / 2 - 80);
+    ctx.fillText('NEON RACER', centerX, centerY - 130);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#ff00ff';
-    ctx.font = '20px monospace';
-    ctx.fillText('极速霓虹', this.width / 2, this.height / 2 - 40);
+    ctx.font = '18px monospace';
+    ctx.fillText('极速霓虹', centerX, centerY - 92);
+
+    const panelW = 400;
+    const panelH = 260;
+    const panelX = centerX - panelW / 2;
+    const panelY = centerY - 20;
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#00f5ff';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    this._drawMenuSelector(
+      panelX, panelY + 75, panelW,
+      '难度', DifficultySettings[game.difficulty].label, DifficultySettings[game.difficulty].color,
+      game.menuCursor === 0
+    );
+
+    this._drawMenuSelector(
+      panelX, panelY + 135, panelW,
+      '圈数', `${game.totalLaps} 圈`, '#ffff00',
+      game.menuCursor === 1
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + 210, panelW,
+      '开始比赛',
+      game.menuCursor === 2
+    );
+
+    ctx.fillStyle = '#555';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 选择  ←→ 调整  空格/回车 确认', centerX, panelY + panelH + 25);
+    ctx.fillText('点击左右箭头区域可调整选项', centerX, panelY + panelH + 45);
+
+    ctx.restore();
+  }
+
+  _drawMenuSelector(x, y, w, label, value, valueColor, selected) {
+    const ctx = this.ctx;
+
+    if (selected) {
+      ctx.fillStyle = 'rgba(0, 245, 255, 0.08)';
+      ctx.beginPath();
+      ctx.roundRect(x + 10, y - 18, w - 20, 50, 8);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(0, 245, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x + 10, y - 18, w - 20, 50, 8);
+      ctx.stroke();
+    }
 
     ctx.fillStyle = '#888';
     ctx.font = '16px monospace';
-    ctx.fillText('按 空格键 或 点击 开始游戏', this.width / 2, this.height / 2 + 30);
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x + 30, y + 8);
 
-    ctx.font = '14px monospace';
     ctx.fillStyle = '#666';
-    ctx.fillText('WASD / 方向键 - 控制方向', this.width / 2, this.height / 2 + 80);
-    ctx.fillText('触屏设备使用虚拟按键', this.width / 2, this.height / 2 + 105);
+    ctx.font = '22px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('◀', x + 110, y + 10);
 
-    ctx.restore();
+    ctx.shadowBlur = selected ? 12 : 0;
+    ctx.shadowColor = valueColor;
+    ctx.fillStyle = valueColor;
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(value, x + w / 2, y + 10);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#666';
+    ctx.font = '22px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('▶', x + w - 30, y + 10);
+  }
+
+  _drawMenuButton(x, y, w, label, selected) {
+    const ctx = this.ctx;
+    const btnX = x + 60;
+    const btnW = w - 120;
+    const btnH = 40;
+
+    const bgColor = selected ? 'rgba(0, 245, 255, 0.15)' : 'rgba(40, 40, 60, 0.8)';
+    const borderColor = selected ? '#00f5ff' : '#444';
+    const textColor = selected ? '#00f5ff' : '#888';
+
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(btnX, y - 5, btnW, btnH, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = selected ? 2 : 1;
+    if (selected) {
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = borderColor;
+    }
+    ctx.beginPath();
+    ctx.roundRect(btnX, y - 5, btnW, btnH, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, btnX + btnW / 2, y + 20);
   }
 
   drawCountdown(count) {
@@ -468,6 +624,7 @@ class Renderer {
     const ctx = this.ctx;
     const rankings = game.getRankings();
     const playerRank = rankings.findIndex(r => r.bike.isPlayer) + 1;
+    const cfg = DifficultySettings[game.difficulty];
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -476,7 +633,7 @@ class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
 
     const panelWidth = 350;
-    const panelHeight = 380;
+    const panelHeight = 450;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -506,25 +663,36 @@ class Renderer {
     ctx.font = 'bold 24px monospace';
     ctx.fillText(`你的名次: 第 ${playerRank} 名`, this.width / 2, panelY + 90);
 
+    ctx.fillStyle = cfg.color;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = cfg.color;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(`难度: ${cfg.label}`, this.width / 2, panelY + 118);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffff00';
+    ctx.font = '16px monospace';
+    ctx.fillText(`圈数: ${game.totalLaps} 圈`, this.width / 2, panelY + 142);
+
     ctx.fillStyle = '#ffffff';
     ctx.font = '18px monospace';
-    ctx.fillText(`用时: ${Utils.formatTime(game.player.raceTime)}`, this.width / 2, panelY + 125);
+    ctx.fillText(`用时: ${Utils.formatTime(game.player.raceTime)}`, this.width / 2, panelY + 172);
 
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(panelX + 30, panelY + 150);
-    ctx.lineTo(panelX + panelWidth - 30, panelY + 150);
+    ctx.moveTo(panelX + 30, panelY + 195);
+    ctx.lineTo(panelX + panelWidth - 30, panelY + 195);
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('最终排名', panelX + 30, panelY + 180);
+    ctx.fillText('最终排名', panelX + 30, panelY + 223);
 
     rankings.forEach((r, i) => {
       const bike = r.bike;
-      const y = panelY + 210 + i * 32;
+      const y = panelY + 253 + i * 32;
 
       ctx.fillStyle = bike.isPlayer ? '#ffff00' : '#888';
       ctx.font = '14px monospace';
@@ -547,7 +715,7 @@ class Renderer {
     ctx.shadowColor = '#00f5ff';
     ctx.font = 'bold 18px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('按 空格键 或 点击 重新开始', this.width / 2, panelY + panelHeight - 30);
+    ctx.fillText('按 空格键 返回菜单', this.width / 2, panelY + panelHeight - 25);
     ctx.shadowBlur = 0;
 
     ctx.restore();

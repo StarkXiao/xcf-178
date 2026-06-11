@@ -1,6 +1,7 @@
 class Collision {
   constructor(track) {
     this.track = track;
+    this.damageMultiplier = 0.7;
   }
 
   checkTrackCollision(bike) {
@@ -15,7 +16,7 @@ class Collision {
       bike.x -= Math.cos(perpAngle) * pushDirection * pushDistance;
       bike.y -= Math.sin(perpAngle) * pushDirection * pushDistance;
 
-      bike.speed *= 0.6;
+      bike.speed *= 0.5 + this.damageMultiplier * 0.2;
       bike.driftAngle *= 0.3;
 
       return true;
@@ -40,8 +41,8 @@ class Collision {
       bike2.y += pushY;
 
       const avgSpeed = (bike1.speed + bike2.speed) * 0.5;
-      bike1.speed = avgSpeed * 0.7;
-      bike2.speed = avgSpeed * 0.7;
+      bike1.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
+      bike2.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
 
       return true;
     }
