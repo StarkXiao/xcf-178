@@ -75,6 +75,8 @@ class Game {
     this.player = null;
     this.aiBikes = [];
     this.collision = null;
+    this.bestLapRecords = this._loadBestLapRecords();
+    this.isHistoricalRecord = false;
 
     this.lastTime = 0;
     this.running = false;
@@ -324,6 +326,7 @@ class Game {
     });
 
     this.raceTime = 0;
+    this.isHistoricalRecord = false;
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
     this.input.reset();
@@ -347,6 +350,13 @@ class Game {
 
     if (!this.player.finished) {
       this.player.raceTime = this.raceTime;
+    }
+
+    if (this.player.newRecordTimer > 0) {
+      this.player.newRecordTimer -= dt;
+      if (this.player.newRecordTimer <= 0) {
+        this.player.isNewLapRecord = false;
+      }
     }
 
     const playerInput = {
@@ -386,6 +396,7 @@ class Game {
 
     const allFinished = this.getAllBikes().every(b => b.finished);
     if (allFinished || this.player.finished) {
+      this._saveBestLapRecord();
       this.state = GameState.FINISHED;
     }
 
@@ -444,5 +455,54 @@ class Game {
 
   resize(width, height) {
     this.renderer.resize(width, height);
+  }
+
+  _loadBestLapRecords() {
+    try {
+      const data = localStorage.getItem('neonRacer_bestLapRecords');
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  _saveBestLapRecord() {
+    const player = this.player;
+    if (!player || player.bestLapTime === Infinity) return;
+
+    const key = this.difficulty;
+    const currentRecord = this.bestLapRecords[key];
+    this.isHistoricalRecord = false;
+
+    const currentBestTime = currentRecord ? currentRecord.time : Infinity;
+
+    if (player.bestLapTime < currentBestTime) {
+      this.bestLapRecords[key] = {
+        time: player.bestLapTime,
+        date: Date.now(),
+        totalLaps: this.totalLaps,
+        lapIndex: player.lapTimes.indexOf(player.bestLapTime) + 1
+      };
+      this.isHistoricalRecord = true;
+      try {
+        localStorage.setItem('neonRacer_bestLapRecords', JSON.stringify(this.bestLapRecords));
+      } catch (e) {}
+    }
+  }
+
+  getBestLapRecord(difficulty) {
+    const record = this.bestLapRecords[difficulty];
+    if (!record) return null;
+    if (typeof record === 'number') return record;
+    return record.time && record.time < Infinity ? record.time : null;
+  }
+
+  getBestLapRecordDetail(difficulty) {
+    const record = this.bestLapRecords[difficulty];
+    if (!record) return null;
+    if (typeof record === 'number') {
+      return { time: record, date: null, totalLaps: null, lapIndex: null };
+    }
+    return record.time && record.time < Infinity ? record : null;
   }
 }

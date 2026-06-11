@@ -21,6 +21,9 @@ class Bike {
     this.finished = false;
     this.bestLapTime = Infinity;
     this.lastLapTime = 0;
+    this.lapTimes = [];
+    this.isNewLapRecord = false;
+    this.newRecordTimer = 0;
     this.currentRouteId = 'main';
     this.routeCheckpoints = new Map();
     this.routeChangeCooldown = 0;
@@ -156,6 +159,11 @@ class Bike {
     this.checkpoint = 0;
     this.raceTime = 0;
     this.finished = false;
+    this.bestLapTime = Infinity;
+    this.lastLapTime = 0;
+    this.lapTimes = [];
+    this.isNewLapRecord = false;
+    this.newRecordTimer = 0;
     this.currentRouteId = 'main';
     this.routeCheckpoints = new Map();
     this.routeChangeCooldown = 0;

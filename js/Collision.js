@@ -100,8 +100,11 @@ class Collision {
 
     if (bike.lap > 0) {
       const lapTime = bike.raceTime - bike.lastLapTime;
+      bike.lapTimes.push(lapTime);
       if (lapTime < bike.bestLapTime) {
         bike.bestLapTime = lapTime;
+        bike.isNewLapRecord = true;
+        bike.newRecordTimer = 3.0;
       }
       bike.lastLapTime = bike.raceTime;
     }

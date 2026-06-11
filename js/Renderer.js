@@ -568,9 +568,14 @@ class Renderer {
     this._drawSpeedometer(game.player, padding, this.height - 120);
     this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
     this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
+    this._drawBestLap(game.player, game.raceTime, this.width / 2 - 100, padding + 60);
     this._drawRankings(game.getRankings(), padding, padding);
     this._drawDifficultyBadge(game.difficulty, this.width - padding - 180, padding + 95);
     this.drawCurrentRouteIndicator(game.player);
+
+    if (game.player.isNewLapRecord) {
+      this._drawNewRecordOverlay(game.player);
+    }
 
     ctx.restore();
 
@@ -722,6 +727,122 @@ class Renderer {
     ctx.fillText(Utils.formatTime(time), x + 100, y + 35);
   }
 
+  _drawBestLap(player, raceTime, x, y) {
+    const ctx = this.ctx;
+    const currentLapTime = raceTime - player.lastLapTime;
+    const hasBest = player.bestLapTime < Infinity;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 200, 70, 10);
+    ctx.fill();
+
+    const bestColor = hasBest ? '#00ff66' : '#444';
+    ctx.strokeStyle = bestColor;
+    ctx.lineWidth = 2;
+    if (hasBest) {
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = bestColor;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x, y, 200, 70, 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('CURRENT LAP', x + 12, y + 16);
+
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#ffff00';
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(Utils.formatTime(currentLapTime), x + 188, y + 16);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 10, y + 28);
+    ctx.lineTo(x + 190, y + 28);
+    ctx.stroke();
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('BEST LAP', x + 12, y + 48);
+
+    ctx.fillStyle = hasBest ? '#00ff66' : '#555';
+    ctx.shadowBlur = hasBest ? 4 : 0;
+    ctx.shadowColor = bestColor;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      hasBest ? Utils.formatTime(player.bestLapTime) : '--:--:--',
+      x + 188,
+      y + 48
+    );
+    ctx.shadowBlur = 0;
+
+    if (hasBest && currentLapTime > 0 && currentLapTime < player.bestLapTime) {
+      ctx.fillStyle = '#ff6600';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('- ' + Utils.formatTime(player.bestLapTime - currentLapTime), x + 188, y + 64);
+    }
+  }
+
+  _drawNewRecordOverlay(player) {
+    const ctx = this.ctx;
+    const elapsed = 3.0 - player.newRecordTimer;
+    const alpha = Math.max(0, 1 - elapsed * 0.33);
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const centerX = this.width / 2;
+    const centerY = this.height * 0.28;
+
+    const pulseScale = 1 + Math.sin(elapsed * 6) * 0.08;
+    const floatY = Math.sin(elapsed * 3) * 5;
+
+    ctx.translate(centerX, centerY + floatY);
+    ctx.scale(pulseScale, pulseScale);
+
+    const glowSize = 80 + Math.sin(elapsed * 8) * 20;
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
+    gradient.addColorStop(0, `rgba(255, 255, 0, ${alpha * 0.3})`);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-glowSize, -glowSize, glowSize * 2, glowSize * 2);
+
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 新纪录!', 0, -5);
+    ctx.shadowBlur = 0;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#00ff66';
+    ctx.fillStyle = `rgba(0, 255, 102, ${alpha})`;
+    ctx.font = 'bold 26px monospace';
+    ctx.fillText(Utils.formatTime(player.bestLapTime), 0, 35);
+    ctx.shadowBlur = 0;
+
+    if (elapsed > 0.5) {
+      const sparkleAlpha = Math.min(1, (elapsed - 0.5) * 2) * alpha;
+      ctx.fillStyle = `rgba(255, 255, 255, ${sparkleAlpha * 0.8})`;
+      ctx.font = '14px monospace';
+      ctx.fillText('✦ 最佳单圈 ✦', 0, 60);
+    }
+
+    ctx.restore();
+  }
+
   _drawRankings(rankings, x, y) {
     const ctx = this.ctx;
     const width = 180;
@@ -844,6 +965,53 @@ class Renderer {
     ctx.fillText('↑↓ 选择  ←→ 调整  空格/回车 确认', centerX, panelY + panelH + 25);
     ctx.fillText('点击左右箭头区域可调整选项', centerX, panelY + panelH + 45);
 
+    const bestRecord = game.getBestLapRecordDetail(game.difficulty);
+    if (bestRecord !== null) {
+      const recordY = panelY + panelH + 70;
+      const recordH = bestRecord.date ? 50 : 32;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(centerX - 140, recordY - 14, 280, recordH, 8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#00ff66';
+      ctx.beginPath();
+      ctx.roundRect(centerX - 140, recordY - 14, 280, recordH, 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#888';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('🏆 历史最佳单圈', centerX - 128, recordY + 4);
+
+      ctx.fillStyle = '#00ff66';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#00ff66';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(Utils.formatTime(bestRecord.time), centerX + 128, recordY + 4);
+      ctx.shadowBlur = 0;
+
+      if (bestRecord.date) {
+        const date = new Date(bestRecord.date);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        ctx.fillStyle = '#666';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(dateStr, centerX - 128, recordY + 24);
+
+        if (bestRecord.totalLaps) {
+          ctx.textAlign = 'right';
+          ctx.fillText(`${bestRecord.totalLaps} 圈 · 第${bestRecord.lapIndex}圈创造`, centerX + 128, recordY + 24);
+        }
+      }
+    }
+
     ctx.restore();
   }
 
@@ -948,6 +1116,8 @@ class Renderer {
     const rankings = game.getRankings();
     const playerRank = rankings.findIndex(r => r.bike.isPlayer) + 1;
     const cfg = DifficultySettings[game.difficulty];
+    const player = game.player;
+    const hasBestLap = player.bestLapTime < Infinity;
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -955,8 +1125,10 @@ class Renderer {
     ctx.fillStyle = 'rgba(10, 10, 26, 0.9)';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    const panelWidth = 350;
-    const panelHeight = 450;
+    const panelWidth = 380;
+    const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
+    const recordBannerHeight = game.isHistoricalRecord ? 40 : 0;
+    const panelHeight = 500 + lapListHeight + recordBannerHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -997,28 +1169,141 @@ class Renderer {
     ctx.font = '16px monospace';
     ctx.fillText(`圈数: ${game.totalLaps} 圈`, this.width / 2, panelY + 142);
 
+    let infoY = panelY + 170;
+
+    if (game.isHistoricalRecord) {
+      const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+      const bannerY = infoY;
+      const bannerH = 50;
+
+      const gradient = ctx.createLinearGradient(panelX, bannerY, panelX + panelWidth, bannerY);
+      gradient.addColorStop(0, 'rgba(255, 255, 0, 0)');
+      gradient.addColorStop(0.2, `rgba(255, 255, 0, ${0.15 * pulse})`);
+      gradient.addColorStop(0.5, `rgba(255, 255, 0, ${0.35 * pulse})`);
+      gradient.addColorStop(0.8, `rgba(255, 255, 0, ${0.15 * pulse})`);
+      gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(panelX, bannerY, panelWidth, bannerH);
+
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = '#ffff00';
+      ctx.fillStyle = `rgba(255, 255, 0, ${pulse})`;
+      ctx.font = 'bold 22px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🏆 历史最佳单圈新纪录!', this.width / 2, bannerY + 33);
+      ctx.shadowBlur = 0;
+
+      infoY += bannerH + 5;
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.font = '18px monospace';
-    ctx.fillText(`用时: ${Utils.formatTime(game.player.raceTime)}`, this.width / 2, panelY + 172);
+    ctx.textAlign = 'center';
+    ctx.fillText(`总用时: ${Utils.formatTime(game.player.raceTime)}`, this.width / 2, infoY + 15);
+    infoY += 35;
+
+    if (hasBestLap) {
+      ctx.fillStyle = '#00ff66';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#00ff66';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText(`最佳单圈: ${Utils.formatTime(player.bestLapTime)}`, this.width / 2, infoY + 10);
+      ctx.shadowBlur = 0;
+      infoY += 35;
+    }
 
     ctx.strokeStyle = '#444';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(panelX + 30, panelY + 195);
-    ctx.lineTo(panelX + panelWidth - 30, panelY + 195);
+    ctx.moveTo(panelX + 30, infoY);
+    ctx.lineTo(panelX + panelWidth - 30, infoY);
     ctx.stroke();
+    infoY += 20;
+
+    if (player.lapTimes.length > 0) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('各圈用时', panelX + 30, infoY);
+      infoY += 22;
+
+      const avgLapTime = player.lapTimes.reduce((a, b) => a + b, 0) / player.lapTimes.length;
+
+      player.lapTimes.forEach((lapTime, i) => {
+        const isBest = lapTime === player.bestLapTime;
+        const diff = lapTime - player.bestLapTime;
+        const lapY = infoY + i * 24;
+
+        ctx.fillStyle = isBest ? '#00ff66' : '#aaa';
+        ctx.font = isBest ? 'bold 13px monospace' : '13px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`LAP ${i + 1}`, panelX + 45, lapY);
+
+        ctx.fillStyle = isBest ? '#00ff66' : '#ddd';
+        ctx.textAlign = 'center';
+        ctx.fillText(Utils.formatTime(lapTime), panelX + panelWidth / 2, lapY);
+
+        if (isBest) {
+          ctx.fillStyle = '#ffff00';
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText('🏆 BEST', panelX + panelWidth - 30, lapY);
+        } else if (diff < 5000) {
+          ctx.fillStyle = '#ff9900';
+          ctx.font = '11px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText('+' + Utils.formatTime(diff), panelX + panelWidth - 30, lapY);
+        } else {
+          ctx.fillStyle = '#666';
+          ctx.font = '11px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText('+' + Utils.formatTime(diff), panelX + panelWidth - 30, lapY);
+        }
+      });
+
+      infoY += player.lapTimes.length * 24 + 10;
+
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 45, infoY);
+      ctx.lineTo(panelX + panelWidth - 45, infoY);
+      ctx.stroke();
+      infoY += 8;
+
+      ctx.fillStyle = '#888';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('平均圈速', panelX + 45, infoY + 12);
+
+      ctx.fillStyle = '#00f5ff';
+      ctx.textAlign = 'right';
+      ctx.fillText(Utils.formatTime(avgLapTime), panelX + panelWidth - 30, infoY + 12);
+
+      infoY += 25;
+    }
+
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 30, infoY);
+    ctx.lineTo(panelX + panelWidth - 30, infoY);
+    ctx.stroke();
+    infoY += 25;
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('最终排名', panelX + 30, panelY + 223);
+    ctx.fillText('最终排名', panelX + 30, infoY);
+    infoY += 25;
 
     rankings.forEach((r, i) => {
       const bike = r.bike;
-      const y = panelY + 253 + i * 32;
+      const y = infoY + i * 32;
 
       ctx.fillStyle = bike.isPlayer ? '#ffff00' : '#888';
       ctx.font = '14px monospace';
+      ctx.textAlign = 'left';
       ctx.fillText(`${i + 1}.`, panelX + 30, y);
 
       ctx.fillStyle = bike.color;
