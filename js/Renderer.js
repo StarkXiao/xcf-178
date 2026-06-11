@@ -197,6 +197,7 @@ class Renderer {
     this._drawBranchPoints(track);
     this._drawRouteLabels(track);
     this._drawStartFinish(track);
+    this.drawObstacles(track);
   }
 
   _drawBranchPoints(track) {
@@ -471,6 +472,135 @@ class Renderer {
     ctx.shadowBlur = 0;
   }
 
+  drawObstacles(track) {
+    const ctx = this.ctx;
+
+    track.obstacles.forEach(obstacle => {
+      if (obstacle.destroyed) {
+        if (obstacle.respawnTimer < 3) {
+          const pulse = Math.sin(Date.now() * 0.02) * 0.3 + 0.7;
+          const alpha = (1 - obstacle.respawnTimer / 3) * 0.3 * pulse;
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = obstacle.color;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(obstacle.x, obstacle.y);
+
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = obstacle.color;
+
+      if (obstacle.type === 'crate') {
+        this._drawCrate(obstacle);
+      } else if (obstacle.type === 'barrel') {
+        this._drawBarrel(obstacle);
+      } else if (obstacle.type === 'barrier') {
+        this._drawBarrier(obstacle);
+      } else if (obstacle.type === 'rock') {
+        this._drawRock(obstacle);
+      } else {
+        ctx.fillStyle = obstacle.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, obstacle.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+
+      if (obstacle.health < obstacle.maxHealth) {
+        const healthRatio = obstacle.health / obstacle.maxHealth;
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, obstacle.radius + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * healthRatio);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  _drawCrate(obstacle) {
+    const ctx = this.ctx;
+    const r = obstacle.radius;
+    ctx.fillStyle = obstacle.color;
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-r, -r, r * 2, r * 2);
+    ctx.beginPath();
+    ctx.moveTo(-r, -r);
+    ctx.lineTo(r, r);
+    ctx.moveTo(r, -r);
+    ctx.lineTo(-r, r);
+    ctx.stroke();
+  }
+
+  _drawBarrel(obstacle) {
+    const ctx = this.ctx;
+    const r = obstacle.radius;
+    ctx.fillStyle = obstacle.color;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', 0, 1);
+  }
+
+  _drawBarrier(obstacle) {
+    const ctx = this.ctx;
+    const r = obstacle.radius;
+    ctx.fillStyle = obstacle.color;
+    ctx.fillRect(-r * 1.3, -r * 0.6, r * 2.6, r * 1.2);
+    ctx.fillStyle = '#000000';
+    for (let i = -2; i <= 2; i++) {
+      if (i % 2 === 0) {
+        ctx.fillRect(-r * 1.3 + (i + 2) * r * 0.52, -r * 0.6, r * 0.52, r * 1.2);
+      }
+    }
+    ctx.strokeStyle = obstacle.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-r * 1.3, -r * 0.6, r * 2.6, r * 1.2);
+  }
+
+  _drawRock(obstacle) {
+    const ctx = this.ctx;
+    const r = obstacle.radius;
+    ctx.fillStyle = obstacle.color;
+    ctx.beginPath();
+    const points = 7;
+    for (let i = 0; i < points; i++) {
+      const angle = (i / points) * Math.PI * 2;
+      const rr = r * (0.8 + 0.3 * Math.sin(i * 2.3));
+      const x = Math.cos(angle) * rr;
+      const y = Math.sin(angle) * rr;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#555555';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
   drawSkidMarks(bikes) {
     const ctx = this.ctx;
 
@@ -552,10 +682,39 @@ class Renderer {
 
     bikes.forEach(bike => {
       bike.particles.forEach(p => {
-        ctx.fillStyle = `rgba(100, 100, 100, ${p.life * 0.5})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-        ctx.fill();
+        if (p.type === 'explosion') {
+          const color = p.color || '#ff6600';
+          const alpha = Math.min(1, p.life * 1.5);
+          ctx.shadowBlur = 20 * p.life;
+          ctx.shadowColor = color;
+          ctx.fillStyle = color;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+        } else if (p.type === 'spark') {
+          const color = p.color || '#ffffff';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = color;
+          ctx.fillStyle = color;
+          ctx.globalAlpha = p.life;
+          ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+        } else if (p.type === 'smoke') {
+          const alpha = Math.min(0.5, p.life * 0.6);
+          ctx.fillStyle = `rgba(100, 100, 100, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = `rgba(100, 100, 100, ${p.life * 0.5})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
     });
   }
@@ -1496,6 +1655,7 @@ class Renderer {
     const cfg = DifficultySettings[game.difficulty];
     const player = game.player;
     const hasBestLap = player.bestLapTime < Infinity;
+    const bikes = game.getAllBikes();
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1506,7 +1666,8 @@ class Renderer {
     const panelWidth = 380;
     const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
     const recordBannerHeight = game.isHistoricalRecord ? 40 : 0;
-    const panelHeight = 500 + lapListHeight + recordBannerHeight;
+    const obstacleStatsHeight = 170;
+    const panelHeight = 500 + lapListHeight + recordBannerHeight + obstacleStatsHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -1695,6 +1856,71 @@ class Renderer {
       ctx.fillText(Utils.formatTime(bike.raceTime), panelX + panelWidth - 30, y);
       ctx.textAlign = 'left';
     });
+
+    infoY += rankings.length * 32 + 15;
+
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 30, infoY);
+    ctx.lineTo(panelX + panelWidth - 30, infoY);
+    ctx.stroke();
+    infoY += 20;
+
+    const obsStats = game.collision.getObstacleStatistics();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('障碍物统计', panelX + 30, infoY);
+    infoY += 25;
+
+    ctx.fillStyle = '#ff6600';
+    ctx.font = '13px monospace';
+    ctx.fillText(`你破坏的障碍物:`, panelX + 45, infoY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffff00';
+    ctx.fillText(`${player.obstaclesDestroyed || 0} 个`, panelX + panelWidth - 30, infoY);
+    infoY += 22;
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#ff0044';
+    ctx.fillText(`你碰撞障碍物:`, panelX + 45, infoY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ff9900';
+    ctx.fillText(`${player.obstacleCollisions || 0} 次`, panelX + panelWidth - 30, infoY);
+    infoY += 22;
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#888888';
+    ctx.fillText(`全场总破坏数:`, panelX + 45, infoY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#00f5ff';
+    ctx.fillText(`${obsStats.totalDestroyed} / ${obsStats.totalObstacles}`, panelX + panelWidth - 30, infoY);
+    infoY += 22;
+    ctx.textAlign = 'left';
+
+    const destroyRate = obsStats.totalObstacles > 0
+      ? Math.round((obsStats.totalDestroyed / obsStats.totalObstacles) * 100)
+      : 0;
+    ctx.fillStyle = '#888888';
+    ctx.fillText(`破坏率:`, panelX + 45, infoY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = destroyRate >= 50 ? '#00ff66' : '#ffff00';
+    ctx.fillText(`${destroyRate}%`, panelX + panelWidth - 30, infoY);
+    infoY += 25;
+    ctx.textAlign = 'left';
+
+    let aiTotalDestroyed = 0;
+    bikes.forEach(b => {
+      if (!b.isPlayer) aiTotalDestroyed += (b.obstaclesDestroyed || 0);
+    });
+    ctx.fillStyle = '#888888';
+    ctx.font = '12px monospace';
+    ctx.fillText(`AI 总破坏数:`, panelX + 45, infoY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillText(`${aiTotalDestroyed} 个`, panelX + panelWidth - 30, infoY);
+    ctx.textAlign = 'left';
 
     ctx.fillStyle = '#00f5ff';
     ctx.shadowBlur = 10;

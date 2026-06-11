@@ -38,6 +38,12 @@ class Bike {
 
     this.skidMarks = [];
     this.particles = [];
+
+    this.obstacleCollisions = 0;
+    this.obstaclesDestroyed = 0;
+    this.obstacleHitCooldown = 0;
+    this._addExplosionParticles = null;
+    this._addHitParticles = null;
   }
 
   update(dt, input, track) {
@@ -75,6 +81,16 @@ class Bike {
     this.y += Math.sin(moveAngle) * this.speed * dt;
 
     this._addSkidMarks(this.isOnTrack, speedRatio, steerInput);
+
+    if (this._addExplosionParticles) {
+      this._spawnExplosion(this._addExplosionParticles.x, this._addExplosionParticles.y, this._addExplosionParticles.color);
+      this._addExplosionParticles = null;
+    }
+    if (this._addHitParticles) {
+      this._spawnHitSparks(this._addHitParticles.x, this._addHitParticles.y, this._addHitParticles.color);
+      this._addHitParticles = null;
+    }
+
     this._updateParticles(dt);
   }
 
@@ -126,8 +142,63 @@ class Bike {
       vy: Math.sin(angle) * speed,
       size: Utils.randomRange(3, 8),
       life: 1,
-      maxLife: Utils.randomRange(0.3, 0.8)
+      maxLife: Utils.randomRange(0.3, 0.8),
+      color: null,
+      type: 'drift'
     });
+  }
+
+  _spawnExplosion(x, y, color = '#ff6600') {
+    const particleCount = 20;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2 + Utils.randomRange(-0.2, 0.2);
+      const speed = Utils.randomRange(60, 180);
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: Utils.randomRange(4, 12),
+        life: 1,
+        maxLife: Utils.randomRange(0.5, 1.2),
+        color,
+        type: 'explosion'
+      });
+    }
+    for (let i = 0; i < 10; i++) {
+      const angle = Utils.randomRange(0, Math.PI * 2);
+      const speed = Utils.randomRange(20, 80);
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 30,
+        size: Utils.randomRange(6, 16),
+        life: 1,
+        maxLife: Utils.randomRange(0.8, 1.5),
+        color: '#ffff00',
+        type: 'smoke'
+      });
+    }
+  }
+
+  _spawnHitSparks(x, y, color = '#ffffff') {
+    const count = 8;
+    for (let i = 0; i < count; i++) {
+      const angle = Utils.randomRange(0, Math.PI * 2);
+      const speed = Utils.randomRange(80, 200);
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: Utils.randomRange(2, 5),
+        life: 1,
+        maxLife: Utils.randomRange(0.2, 0.5),
+        color,
+        type: 'spark'
+      });
+    }
   }
 
   _updateParticles(dt) {
@@ -135,8 +206,23 @@ class Bike {
       const p = this.particles[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= 0.95;
-      p.vy *= 0.95;
+
+      if (p.type === 'smoke') {
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.vy -= 20 * dt;
+        p.size += 10 * dt;
+      } else if (p.type === 'explosion') {
+        p.vx *= 0.92;
+        p.vy *= 0.92;
+      } else if (p.type === 'spark') {
+        p.vx *= 0.9;
+        p.vy *= 0.9;
+      } else {
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+      }
+
       p.life -= dt / p.maxLife;
 
       if (p.life <= 0) {
@@ -174,5 +260,10 @@ class Bike {
     this.branchChoiceLocked = false;
     this.skidMarks = [];
     this.particles = [];
+    this.obstacleCollisions = 0;
+    this.obstaclesDestroyed = 0;
+    this.obstacleHitCooldown = 0;
+    this._addExplosionParticles = null;
+    this._addHitParticles = null;
   }
 }

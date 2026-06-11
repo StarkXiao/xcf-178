@@ -11,6 +11,7 @@ class AIBike extends Bike {
     this.routeChangeTimer = 0;
     this.preferredRoute = null;
     this.targetRouteId = null;
+    this._forcedBrake = 0;
 
     this._setDifficultyParams();
   }
@@ -67,6 +68,9 @@ class AIBike extends Bike {
 
     if (this.routeChangeTimer > 0) {
       this.routeChangeTimer -= dt;
+    }
+    if (this._forcedBrake > 0) {
+      this._forcedBrake -= dt;
     }
 
     this._updateProgress(track);
@@ -209,6 +213,8 @@ class AIBike extends Bike {
       trackAngle = track.getPointAtDistance(currentDist, this.currentRouteId).angle;
     }
 
+    targetPoint = this._applyObstacleAvoidance(targetPoint, track, lookAhead);
+
     this.targetPoint = targetPoint;
 
     const dx = this.targetPoint.x - this.x;
@@ -276,6 +282,10 @@ class AIBike extends Bike {
       input.accel = true;
     }
 
+    if (this._forcedBrake > 0) {
+      input.brake = true;
+    }
+
     input.accel = !input.brake;
 
     return input;
@@ -297,5 +307,72 @@ class AIBike extends Bike {
     } else {
       this.correctionTimer = 0;
     }
+  }
+
+  _applyObstacleAvoidance(targetPoint, track, lookAhead) {
+    const activeRouteId = this.targetRouteId || this.currentRouteId;
+    const scanDist = lookAhead * 0.7;
+    const currentDist = track.getDistanceAlongTrack(this.x, this.y, activeRouteId).distance;
+    const localSpeedRatio = Math.abs(this.speed) / this.maxSpeed;
+
+    let nearestObstacle = null;
+    let nearestDist = Infinity;
+
+    for (let d = 20; d < scanDist; d += 25) {
+      const checkPoint = track.getPointAtDistance(currentDist + d, activeRouteId);
+      const obstacles = track.getObstaclesNearPoint(
+        checkPoint.x, checkPoint.y, 50, activeRouteId
+      );
+      for (const obs of obstacles) {
+        const distToObs = Utils.distance(this.x, this.y, obs.x, obs.y);
+        if (distToObs < nearestDist) {
+          nearestDist = distToObs;
+          nearestObstacle = obs;
+        }
+      }
+    }
+
+    if (!nearestObstacle || nearestDist > scanDist) {
+      return targetPoint;
+    }
+
+    const avoidStrength = 1 - nearestDist / scanDist;
+    const aggressionFactor = this.aggression;
+
+    if (avoidStrength < 0.15 && aggressionFactor > 0.7) {
+      return targetPoint;
+    }
+
+    const trackPoint = track.getPointAtDistance(currentDist + nearestDist * 0.5, activeRouteId);
+    const perpAngle = trackPoint.angle + Math.PI / 2;
+
+    const route = track.getRoute(activeRouteId);
+    const trackOffset = route.getTrackOffset(this.x, this.y);
+    const halfWidth = track.width / 2;
+    const bikeSide = trackOffset.offset >= 0 ? 1 : -1;
+
+    let avoidSide;
+    if (Math.abs(trackOffset.offset) < halfWidth * 0.3) {
+      avoidSide = bikeSide >= 0 ? -1 : 1;
+    } else {
+      avoidSide = -bikeSide;
+    }
+
+    if (aggressionFactor < 0.5 && Math.random() < 0.3) {
+      avoidSide *= -1;
+    }
+
+    const avoidOffset = (halfWidth * 0.55 + nearestObstacle.radius) * avoidSide * avoidStrength;
+    const adjustedTarget = {
+      x: targetPoint.x + Math.cos(perpAngle) * avoidOffset,
+      y: targetPoint.y + Math.sin(perpAngle) * avoidOffset,
+      angle: targetPoint.angle
+    };
+
+    if (avoidStrength > 0.5 && localSpeedRatio > 0.5) {
+      this._forcedBrake = 0.3;
+    }
+
+    return adjustedTarget;
   }
 }

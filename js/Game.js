@@ -85,6 +85,8 @@ class Game {
     this._prevCollisionCount = 0;
     this._prevWasOffTrack = false;
     this._prevWasDrifting = false;
+    this._prevObstacleCollisions = 0;
+    this._prevObstaclesDestroyed = 0;
 
     this._init();
   }
@@ -498,6 +500,10 @@ class Game {
     this._prevCollisionCount = 0;
     this._prevWasOffTrack = false;
     this._prevWasDrifting = false;
+    this._prevObstacleCollisions = 0;
+    this._prevObstaclesDestroyed = 0;
+    this.track.resetObstacles();
+    this.collision.resetObstacleStats();
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
     this.input.reset();
@@ -555,6 +561,7 @@ class Game {
 
     this.player.update(dt, playerInput, this.track);
     this.collision.checkTrackCollision(this.player);
+    this.collision.checkObstacleCollision(this.player);
     this.collision.updateRouteTracking(this.player);
     this.collision.updateCheckpoints(this.player);
     this.collision.updateBranchHints(this.player);
@@ -570,6 +577,7 @@ class Game {
       }
       ai.update(dt, this.track, this.getAllBikes());
       this.collision.checkTrackCollision(ai);
+      this.collision.checkObstacleCollision(ai);
       this.collision.updateRouteTracking(ai);
       this.collision.updateCheckpoints(ai);
       this.collision.updateBranchHints(ai);
@@ -579,11 +587,25 @@ class Game {
       }
     });
 
+    this.track.updateObstacles(dt);
+
     const collisionCount = this.collision._bikeCollisionCount || 0;
     if (collisionCount > this._prevCollisionCount) {
       this.touchManager.vibrate('collision');
     }
     this._prevCollisionCount = collisionCount;
+
+    const playerObsCollisions = this.player.obstacleCollisions || 0;
+    if (playerObsCollisions > this._prevObstacleCollisions) {
+      this.touchManager.vibrate('collision');
+    }
+    this._prevObstacleCollisions = playerObsCollisions;
+
+    const playerObsDestroyed = this.player.obstaclesDestroyed || 0;
+    if (playerObsDestroyed > this._prevObstaclesDestroyed) {
+      this.touchManager.vibrate('newRecord');
+    }
+    this._prevObstaclesDestroyed = playerObsDestroyed;
 
     if (!this.player.isOnTrack && !this._prevWasOffTrack) {
       this.touchManager.vibrate('offTrack');

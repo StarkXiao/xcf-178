@@ -99,6 +99,52 @@ class Route {
   }
 }
 
+class Obstacle {
+  constructor(x, y, type = 'crate', routeId = 'main') {
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.routeId = routeId;
+    this.destroyed = false;
+    this.respawnTimer = 0;
+
+    const types = {
+      crate: { radius: 22, health: 1, color: '#ff6600', speedPenalty: 0.45 },
+      barrel: { radius: 18, health: 1, color: '#ff0044', speedPenalty: 0.4 },
+      barrier: { radius: 26, health: 2, color: '#ffaa00', speedPenalty: 0.55 },
+      rock: { radius: 20, health: 3, color: '#888888', speedPenalty: 0.5 }
+    };
+
+    const cfg = types[type] || types.crate;
+    this.radius = cfg.radius;
+    this.maxHealth = cfg.health;
+    this.health = cfg.health;
+    this.color = cfg.color;
+    this.speedPenalty = cfg.speedPenalty;
+    this.respawnTime = 12;
+  }
+
+  hit(damage = 1) {
+    this.health -= damage;
+    if (this.health <= 0) {
+      this.destroyed = true;
+      this.respawnTimer = this.respawnTime;
+      return true;
+    }
+    return false;
+  }
+
+  update(dt) {
+    if (this.destroyed) {
+      this.respawnTimer -= dt;
+      if (this.respawnTimer <= 0) {
+        this.destroyed = false;
+        this.health = this.maxHealth;
+      }
+    }
+  }
+}
+
 class BranchPoint {
   constructor(distance, position, routes, triggerRadius = 100) {
     this.distance = distance;
@@ -123,6 +169,7 @@ class Track {
     this.width = width;
     this.routes = new Map();
     this.branchPoints = [];
+    this.obstacles = [];
     this.currentRouteId = 'main';
     this.totalLength = 0;
     this.segmentLengths = [];
@@ -131,6 +178,7 @@ class Track {
     this.routeHints = [];
     this._generateTrackWithBranches();
     this._setupBranchPoints();
+    this._generateObstacles();
     this._syncMainRoute();
   }
 
@@ -258,6 +306,57 @@ class Track {
       ],
       120
     ));
+  }
+
+  _generateObstacles() {
+    this.obstacles = [];
+    const obstacleTypes = ['crate', 'barrel', 'barrier', 'rock'];
+
+    this.routes.forEach((route, routeId) => {
+      const obstacleCount = route.isShortcut ? 6 : (routeId === 'main' ? 10 : 8);
+      const spacing = route.totalLength / obstacleCount;
+      const startOffset = routeId === 'main' ? spacing * 1.5 : spacing * 0.8;
+
+      for (let i = 0; i < obstacleCount; i++) {
+        const dist = startOffset + i * spacing + Utils.randomRange(-spacing * 0.2, spacing * 0.2);
+        const point = route.getPointAtDistance(dist);
+        const perpAngle = point.angle + Math.PI / 2;
+        const maxOffset = (this.width / 2) * 0.6;
+        const lateralOffset = Utils.randomRange(-maxOffset, maxOffset);
+
+        const type = obstacleTypes[Utils.randomInt(0, obstacleTypes.length - 1)];
+        const x = point.x + Math.cos(perpAngle) * lateralOffset;
+        const y = point.y + Math.sin(perpAngle) * lateralOffset;
+
+        this.obstacles.push(new Obstacle(x, y, type, routeId));
+      }
+    });
+  }
+
+  getActiveObstacles(routeId = null) {
+    return this.obstacles.filter(o =>
+      !o.destroyed && (!routeId || o.routeId === routeId)
+    );
+  }
+
+  getObstaclesNearPoint(x, y, radius, routeId = null) {
+    return this.obstacles.filter(o => {
+      if (o.destroyed) return false;
+      if (routeId && o.routeId !== routeId) return false;
+      return Utils.distance(x, y, o.x, o.y) < radius + o.radius;
+    });
+  }
+
+  updateObstacles(dt) {
+    this.obstacles.forEach(o => o.update(dt));
+  }
+
+  resetObstacles() {
+    this.obstacles.forEach(o => {
+      o.destroyed = false;
+      o.health = o.maxHealth;
+      o.respawnTimer = 0;
+    });
   }
 
   _syncMainRoute() {

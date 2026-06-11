@@ -3,6 +3,8 @@ class Collision {
     this.track = track;
     this.damageMultiplier = 0.7;
     this._bikeCollisionCount = 0;
+    this._obstacleCollisionCount = 0;
+    this._obstaclesDestroyedTotal = 0;
   }
 
   checkTrackCollision(bike) {
@@ -258,5 +260,81 @@ class Collision {
     }
 
     return stats;
+  }
+
+  checkObstacleCollision(bike) {
+    const bikeRadius = bike.wheelBase * 0.5;
+    const nearbyObstacles = this.track.getObstaclesNearPoint(
+      bike.x, bike.y, bikeRadius + 40, bike.currentRouteId
+    );
+
+    let hitOccurred = false;
+
+    for (const obstacle of nearbyObstacles) {
+      const dist = Utils.distance(bike.x, bike.y, obstacle.x, obstacle.y);
+      const minDist = bikeRadius + obstacle.radius;
+
+      if (dist < minDist) {
+        hitOccurred = true;
+        this._obstacleCollisionCount++;
+
+        const angle = Math.atan2(bike.y - obstacle.y, bike.x - obstacle.x);
+        const overlap = minDist - dist;
+
+        bike.x += Math.cos(angle) * overlap;
+        bike.y += Math.sin(angle) * overlap;
+
+        const speedPenalty = obstacle.speedPenalty * (1 - this.damageMultiplier * 0.2);
+        bike.speed *= Math.max(0.1, 1 - speedPenalty);
+        bike.driftAngle *= 0.4;
+
+        const damage = bike.speed > bike.maxSpeed * 0.4 ? 2 : 1;
+        const destroyed = obstacle.hit(damage);
+
+        if (destroyed) {
+          this._obstaclesDestroyedTotal++;
+          if (!bike.obstaclesDestroyed) bike.obstaclesDestroyed = 0;
+          bike.obstaclesDestroyed++;
+          bike._addExplosionParticles = { x: obstacle.x, y: obstacle.y, color: obstacle.color };
+        } else {
+          bike._addHitParticles = { x: obstacle.x, y: obstacle.y, color: obstacle.color };
+        }
+
+        if (!bike.obstacleCollisions) bike.obstacleCollisions = 0;
+        bike.obstacleCollisions++;
+
+        bike.obstacleHitCooldown = 0.15;
+      }
+    }
+
+    return hitOccurred;
+  }
+
+  checkAllObstacleCollisions(bikes) {
+    let totalHits = 0;
+    for (const bike of bikes) {
+      if (bike.obstacleHitCooldown && bike.obstacleHitCooldown > 0) {
+        bike.obstacleHitCooldown -= 0.016;
+        continue;
+      }
+      if (this.checkObstacleCollision(bike)) {
+        totalHits++;
+      }
+    }
+    return totalHits;
+  }
+
+  getObstacleStatistics() {
+    return {
+      totalCollisions: this._obstacleCollisionCount,
+      totalDestroyed: this._obstaclesDestroyedTotal,
+      remainingActive: this.track.getActiveObstacles().length,
+      totalObstacles: this.track.obstacles.length
+    };
+  }
+
+  resetObstacleStats() {
+    this._obstacleCollisionCount = 0;
+    this._obstaclesDestroyedTotal = 0;
   }
 }
