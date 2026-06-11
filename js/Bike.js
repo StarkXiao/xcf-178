@@ -52,6 +52,9 @@ class Bike {
     if (this.routeChangeCooldown > 0) {
       this.routeChangeCooldown -= dt;
     }
+    if (this.obstacleHitCooldown > 0) {
+      this.obstacleHitCooldown -= dt;
+    }
 
     if (input.accel) {
       this.speed = Math.min(this.speed + this.acceleration * dt, this.maxSpeed);

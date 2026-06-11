@@ -263,6 +263,10 @@ class Collision {
   }
 
   checkObstacleCollision(bike) {
+    if (bike.obstacleHitCooldown && bike.obstacleHitCooldown > 0) {
+      return false;
+    }
+
     const bikeRadius = bike.wheelBase * 0.5;
     const nearbyObstacles = this.track.getObstaclesNearPoint(
       bike.x, bike.y, bikeRadius + 40, bike.currentRouteId
@@ -303,7 +307,8 @@ class Collision {
         if (!bike.obstacleCollisions) bike.obstacleCollisions = 0;
         bike.obstacleCollisions++;
 
-        bike.obstacleHitCooldown = 0.15;
+        bike.obstacleHitCooldown = 0.25;
+        break;
       }
     }
 
@@ -313,10 +318,6 @@ class Collision {
   checkAllObstacleCollisions(bikes) {
     let totalHits = 0;
     for (const bike of bikes) {
-      if (bike.obstacleHitCooldown && bike.obstacleHitCooldown > 0) {
-        bike.obstacleHitCooldown -= 0.016;
-        continue;
-      }
       if (this.checkObstacleCollision(bike)) {
         totalHits++;
       }
