@@ -1715,6 +1715,459 @@ class Renderer {
     });
   }
 
+  drawVehicleSelect(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    this._drawVehicleSelectBackground();
+
+    const titleY = isPortrait ? 35 * uiScale : 45;
+    const titleSize = isPortrait ? 26 * uiScale : 32;
+    const subtitleSize = isPortrait ? 11 * uiScale : 14;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('车辆选择', centerX, titleY);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText('← → 切换车辆  空格/回车 确认  ESC 返回', centerX, titleY + (isPortrait ? 22 * uiScale : 28));
+
+    const selectedKey = VehicleTypeKeys[game.vehicleSelectCursor];
+    const selectedVehicle = VehicleTypes[selectedKey];
+    const isCurrentVehicle = selectedKey === game.selectedVehicle;
+
+    if (isPortrait) {
+      this._drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+    } else {
+      this._drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+    }
+
+    ctx.restore();
+  }
+
+  _drawVehicleSelectBackground() {
+    const ctx = this.ctx;
+    const gradient = ctx.createRadialGradient(
+      this.width * 0.3, this.height * 0.4, 0,
+      this.width * 0.3, this.height * 0.4, this.width * 0.6
+    );
+    gradient.addColorStop(0, 'rgba(0, 245, 255, 0.05)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const gradient2 = ctx.createRadialGradient(
+      this.width * 0.7, this.height * 0.6, 0,
+      this.width * 0.7, this.height * 0.6, this.width * 0.5
+    );
+    gradient2.addColorStop(0, 'rgba(255, 0, 255, 0.05)');
+    gradient2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient2;
+    ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  _drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+    const ctx = this.ctx;
+
+    const previewPanelX = 60;
+    const previewPanelY = 100;
+    const previewPanelW = 380;
+    const previewPanelH = this.height - 180;
+
+    const listPanelX = previewPanelX + previewPanelW + 30;
+    const listPanelY = 100;
+    const listPanelW = this.width - listPanelX - 60;
+    const listPanelH = this.height - 180;
+
+    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle);
+    this._drawVehicleListPanel(listPanelX, listPanelY, listPanelW, listPanelH, game, selectedKey);
+    this._drawActionButtons(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey);
+  }
+
+  _drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+    const ctx = this.ctx;
+
+    const previewH = 200 * uiScale;
+    const previewY = 70 * uiScale;
+    const previewW = Math.min(340 * uiScale, this.width * 0.9);
+    const previewX = centerX - previewW / 2;
+
+    const listY = previewY + previewH + 15 * uiScale;
+    const listH = this.height - listY - 100 * uiScale;
+    const listW = Math.min(360 * uiScale, this.width * 0.92);
+    const listX = centerX - listW / 2;
+
+    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle);
+    this._drawVehicleListPanel(listX, listY, listW, listH, game, selectedKey);
+    this._drawActionButtons(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey);
+  }
+
+  _drawPreviewPanel(x, y, w, h, vehicle, isCurrent) {
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+
+    ctx.fillStyle = 'rgba(20, 20, 45, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = vehicle.color;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = vehicle.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    if (isCurrent) {
+      const badgeW = 70;
+      const badgeH = 22;
+      ctx.fillStyle = 'rgba(0, 255, 102, 0.2)';
+      ctx.beginPath();
+      ctx.roundRect(x + w - badgeW - 12, y + 12, badgeW, badgeH, 4);
+      ctx.fill();
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#00ff66';
+      ctx.beginPath();
+      ctx.roundRect(x + w - badgeW - 12, y + 12, badgeW, badgeH, 4);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#00ff66';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('✓ 当前使用', x + w - badgeW / 2 - 12, y + 12 + badgeH * 0.72);
+    }
+
+    const previewSize = Math.min(w * 0.5, h * 0.4);
+    const previewY = y + h * 0.28;
+    const scale = previewSize / 50;
+    this._drawVehiclePreview(x + w / 2, previewY, vehicle, scale, true);
+
+    const nameSize = isPortrait ? 24 * uiScale : 28;
+    const subSize = isPortrait ? 13 * uiScale : 15;
+    const nameY = y + h * 0.55;
+
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = vehicle.color;
+    ctx.fillStyle = vehicle.color;
+    ctx.font = `bold ${nameSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(vehicle.name, x + w / 2, nameY);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${subSize}px monospace`;
+    ctx.fillText(vehicle.subtitle, x + w / 2, nameY + subSize + 6);
+
+    const descSize = isPortrait ? 11 * uiScale : 12;
+    ctx.fillStyle = '#888';
+    ctx.font = `${descSize}px monospace`;
+    ctx.fillText(vehicle.description, x + w / 2, nameY + subSize + descSize + 18);
+
+    const statsStartY = nameY + subSize + descSize + 45;
+    this._drawDetailedStats(x + 25, statsStartY, w - 50, vehicle, isPortrait, uiScale);
+  }
+
+  _drawDetailedStats(x, y, w, vehicle, isPortrait, uiScale) {
+    const ctx = this.ctx;
+    const statNames = ['最高速度', '加速能力', '转向操控', '氮气系统'];
+    const statKeys = ['speed', 'accel', 'handling', 'nitro'];
+    const statValues = [
+      `${Math.round(vehicle.baseMaxSpeed * 3.6 / 5)} km/h`,
+      `${vehicle.baseAcceleration.toFixed(0)}`,
+      `${vehicle.steerSpeed.toFixed(1)}`,
+      `${vehicle.nitroMaxEnergy}`
+    ];
+    const barH = isPortrait ? 10 * uiScale : 12;
+    const statSpacing = isPortrait ? 28 * uiScale : 30;
+    const labelSize = isPortrait ? 10 * uiScale : 11;
+    const valueSize = isPortrait ? 10 * uiScale : 11;
+
+    statKeys.forEach((statKey, si) => {
+      const sy = y + si * statSpacing;
+      const value = vehicle.stats[statKey];
+
+      ctx.fillStyle = '#999';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(statNames[si], x, sy);
+
+      ctx.fillStyle = vehicle.color;
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(statValues[si], x + w, sy);
+
+      const barY = sy + 6;
+      ctx.fillStyle = 'rgba(30, 30, 60, 0.8)';
+      ctx.beginPath();
+      ctx.roundRect(x, barY, w, barH, 4);
+      ctx.fill();
+
+      const fillW = w * (value / 5);
+      const statGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+      statGrad.addColorStop(0, vehicle.color);
+      statGrad.addColorStop(1, vehicle.accentColor);
+      ctx.fillStyle = statGrad;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = vehicle.color;
+      ctx.beginPath();
+      ctx.roundRect(x, barY, fillW, barH, 4);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      for (let seg = 1; seg < 5; seg++) {
+        const segX = x + (w / 5) * seg;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(segX, barY);
+        ctx.lineTo(segX, barY + barH);
+        ctx.stroke();
+      }
+    });
+  }
+
+  _drawVehicleListPanel(x, y, w, h, game, selectedKey) {
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.stroke();
+
+    const titleSize = isPortrait ? 14 * uiScale : 16;
+    ctx.fillStyle = '#888';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('车型列表', x + 18, y + 30);
+
+    const itemCount = VehicleTypeKeys.length;
+    const itemGap = isPortrait ? 8 * uiScale : 10;
+    const itemH = isPortrait ? 58 * uiScale : 65;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = y + 50 + (h - 60 - totalItemH) / 2;
+
+    VehicleTypeKeys.forEach((key, idx) => {
+      const vehicle = VehicleTypes[key];
+      const iy = startY + idx * (itemH + itemGap);
+      const isSelected = key === selectedKey;
+      const isCurrent = key === game.selectedVehicle;
+
+      if (isSelected) {
+        ctx.fillStyle = 'rgba(0, 245, 255, 0.08)';
+        ctx.beginPath();
+        ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
+        ctx.fill();
+
+        ctx.strokeStyle = vehicle.color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = vehicle.color;
+        ctx.beginPath();
+        ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const thumbSize = itemH * 0.6;
+      const thumbX = x + 25 + thumbSize / 2;
+      const thumbY = iy + itemH / 2;
+      const thumbScale = thumbSize / 50;
+      this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+
+      const nameX = x + 50 + thumbSize;
+      const nameSize = isPortrait ? 14 * uiScale : 16;
+      const subSize = isPortrait ? 10 * uiScale : 11;
+
+      ctx.fillStyle = vehicle.color;
+      ctx.shadowBlur = isSelected ? 8 : 0;
+      ctx.shadowColor = vehicle.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(vehicle.name, nameX, iy + itemH * 0.4);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#777';
+      ctx.font = `${subSize}px monospace`;
+      ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+
+      if (isCurrent) {
+        const badgeW = 44;
+        const badgeH = 16;
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(x + w - badgeW - 20, iy + itemH / 2 - badgeH / 2, badgeW, badgeH, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x + w - badgeW - 20, iy + itemH / 2 - badgeH / 2, badgeW, badgeH, 4);
+        ctx.stroke();
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold 9px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText('当前', x + w - badgeW / 2 - 20, iy + itemH / 2 + 3);
+      }
+
+      const rightPadding = isCurrent ? 75 : 20;
+      const miniStatsY = iy + itemH * 0.42;
+      const miniStatW = w - (50 + thumbSize) - rightPadding;
+      const miniStatH = isPortrait ? 3 * uiScale : 4;
+      const miniStatKeys = ['speed', 'accel', 'handling', 'nitro'];
+      const miniStatSpacing = isPortrait ? 2 * uiScale : 2;
+
+      miniStatKeys.forEach((statKey, si) => {
+        const sy = miniStatsY + si * (miniStatH + miniStatSpacing) + 12;
+        const value = vehicle.stats[statKey];
+        const fillW = miniStatW * (value / 5);
+
+        ctx.fillStyle = 'rgba(40, 40, 70, 0.6)';
+        ctx.fillRect(nameX, sy, miniStatW, miniStatH);
+
+        ctx.fillStyle = vehicle.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fillRect(nameX, sy, fillW, miniStatH);
+        ctx.globalAlpha = 1;
+      });
+    });
+
+    const hintSize = isPortrait ? 9 * uiScale : 10;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 或 点击选择车辆', x + w / 2, y + h - 15);
+  }
+
+  _drawActionButtons(x, y, w, game, selectedVehicle, selectedKey) {
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const btnH = isPortrait ? 40 * uiScale : 44;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (w - btnGap) / 2;
+
+    const cancelX = x;
+    const confirmX = x + btnW + btnGap;
+
+    this._drawVehicleButton(cancelX, y, btnW, btnH, '返回', '#666', '#444', false);
+    this._drawVehicleButton(confirmX, y, btnW, btnH, '确认选择', selectedVehicle.color, selectedVehicle.accentColor, true);
+
+    const hintSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('ESC 返回  |  空格/回车 确认', x + w / 2, y + btnH + 18);
+  }
+
+  _drawVehicleButton(x, y, w, h, label, color, accentColor, primary) {
+    const ctx = this.ctx;
+    const time = Date.now() * 0.003;
+    const pulse = Math.sin(time) * 0.1 + 0.9;
+
+    const bgColor = primary ? `rgba(${parseInt(color.slice(1,3), 16)}, ${parseInt(color.slice(3,5), 16)}, ${parseInt(color.slice(5,7), 16)}, 0.15)` : 'rgba(40, 40, 60, 0.8)';
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = primary ? color : '#555';
+    ctx.lineWidth = primary ? 2 : 1;
+    if (primary) {
+      ctx.shadowBlur = 12 * pulse;
+      ctx.shadowColor = color;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const textSize = h * 0.38;
+    ctx.fillStyle = primary ? color : '#aaa';
+    ctx.shadowBlur = primary ? 8 : 0;
+    ctx.shadowColor = primary ? color : 'transparent';
+    ctx.font = `bold ${textSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + w / 2, y + h / 2 + 2);
+    ctx.shadowBlur = 0;
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  _drawVehiclePreview(x, y, vehicle, scale, isSelected) {
+    const ctx = this.ctx;
+    const selectedMultiplier = isSelected ? 1.2 : 1.0;
+    const s = scale * selectedMultiplier;
+    const wheelBase = vehicle.wheelBase * s;
+    const halfWidth = vehicle.bikeWidth / 2 * s;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    if (isSelected) {
+      const pulse = Math.sin(Date.now() * 0.004) * 0.3 + 0.7;
+      ctx.shadowBlur = 20 * scale;
+      ctx.shadowColor = vehicle.color;
+      ctx.strokeStyle = vehicle.color;
+      ctx.lineWidth = 2 * scale;
+      ctx.globalAlpha = pulse * 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, wheelBase * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.shadowBlur = isSelected ? 18 : 8;
+    ctx.shadowColor = vehicle.color;
+
+    ctx.fillStyle = vehicle.color;
+    ctx.beginPath();
+    ctx.moveTo(wheelBase * 0.6, 0);
+    ctx.lineTo(wheelBase * 0.2, -halfWidth);
+    ctx.lineTo(-wheelBase * 0.5, -halfWidth * 0.8);
+    ctx.lineTo(-wheelBase * 0.7, 0);
+    ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.8);
+    ctx.lineTo(wheelBase * 0.2, halfWidth);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.ellipse(wheelBase * 0.1, 0, halfWidth * 0.5, halfWidth * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
   drawMenu(game) {
     const ctx = this.ctx;
     const centerX = this.width / 2;
@@ -1745,9 +2198,9 @@ class Renderer {
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 280 * uiScale : 310;
+    const panelH = isPortrait ? 310 * uiScale : 340;
     const panelX = centerX - panelW / 2;
-    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 20;
+    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 30;
 
     ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
     ctx.beginPath();
@@ -1763,11 +2216,14 @@ class Renderer {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    const itemSpacing = isPortrait ? 55 * uiScale : 60;
-    const btnOffset0 = isPortrait ? 60 * uiScale : 75;
+    const itemSpacing = isPortrait ? 48 * uiScale : 52;
+    const btnOffset0 = isPortrait ? 50 * uiScale : 65;
     const btnOffset1 = btnOffset0 + itemSpacing;
     const btnOffset2 = btnOffset1 + itemSpacing;
-    const btnOffset3 = btnOffset2 + itemSpacing + 10 * uiScale;
+    const btnOffset3 = btnOffset2 + itemSpacing + 8 * uiScale;
+    const btnOffset4 = btnOffset3 + itemSpacing;
+
+    const vehicle = VehicleTypes[game.selectedVehicle];
 
     this._drawMenuSelector(
       panelX, panelY + btnOffset0, panelW,
@@ -1781,19 +2237,30 @@ class Renderer {
       game.menuCursor === 1, uiScale
     );
 
-    this._drawMenuButton(
+    this._drawMenuSelector(
       panelX, panelY + btnOffset2, panelW,
-      '操控设置',
+      '车辆', vehicle.name, vehicle.color,
       game.menuCursor === 2, uiScale
     );
 
+    const vehiclePreviewScale = isPortrait ? 0.5 * uiScale : 0.6;
+    const vehiclePreviewX = panelX + panelW - 35 * uiScale;
+    const vehiclePreviewY = panelY + btnOffset2 + 8 * uiScale;
+    this._drawVehiclePreview(vehiclePreviewX, vehiclePreviewY, vehicle, vehiclePreviewScale, game.menuCursor === 2);
+
     this._drawMenuButton(
       panelX, panelY + btnOffset3, panelW,
-      '开始比赛',
+      '操控设置',
       game.menuCursor === 3, uiScale
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset2 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawMenuButton(
+      panelX, panelY + btnOffset4, panelW,
+      '开始比赛',
+      game.menuCursor === 4, uiScale
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset4 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -1998,7 +2465,7 @@ class Renderer {
     const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
     const recordBannerHeight = game.isHistoricalRecord ? 40 : 0;
     const obstacleStatsHeight = 170;
-    const panelHeight = 500 + lapListHeight + recordBannerHeight + obstacleStatsHeight;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -2039,7 +2506,15 @@ class Renderer {
     ctx.font = '16px monospace';
     ctx.fillText(`圈数: ${game.totalLaps} 圈`, this.width / 2, panelY + 142);
 
-    let infoY = panelY + 170;
+    const vehicle = VehicleTypes[game.selectedVehicle];
+    ctx.fillStyle = vehicle.color;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = vehicle.color;
+    ctx.font = '16px monospace';
+    ctx.fillText(`车辆: ${vehicle.name}`, this.width / 2, panelY + 166);
+    ctx.shadowBlur = 0;
+
+    let infoY = panelY + 194;
 
     if (game.isHistoricalRecord) {
       const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;

@@ -1,9 +1,95 @@
 const GameState = {
   MENU: 'menu',
+  VEHICLE_SELECT: 'vehicleSelect',
   COUNTDOWN: 'countdown',
   RACING: 'racing',
   FINISHED: 'finished'
 };
+
+const VehicleTypes = {
+  phantom: {
+    id: 'phantom',
+    name: '幻影',
+    subtitle: '均衡型',
+    color: '#00f5ff',
+    accentColor: '#0088aa',
+    baseMaxSpeed: 320,
+    baseAcceleration: 200,
+    steerSpeed: 2.8,
+    brakePower: 350,
+    baseOffTrackFriction: 3.5,
+    nitroMaxEnergy: 100,
+    nitroChargeRate: 18,
+    nitroSpeedBoost: 1.6,
+    nitroAccelBoost: 2.5,
+    wheelBase: 24,
+    bikeWidth: 14,
+    description: '各项属性均衡，适合新手入门',
+    stats: { speed: 3, accel: 3, handling: 3, nitro: 3 }
+  },
+  thunder: {
+    id: 'thunder',
+    name: '雷霆',
+    subtitle: '极速型',
+    color: '#ff00ff',
+    accentColor: '#aa00aa',
+    baseMaxSpeed: 360,
+    baseAcceleration: 165,
+    steerSpeed: 2.3,
+    brakePower: 290,
+    baseOffTrackFriction: 4.5,
+    nitroMaxEnergy: 80,
+    nitroChargeRate: 14,
+    nitroSpeedBoost: 1.5,
+    nitroAccelBoost: 2.2,
+    wheelBase: 28,
+    bikeWidth: 16,
+    description: '极致速度，操控偏弱',
+    stats: { speed: 5, accel: 2, handling: 2, nitro: 2 }
+  },
+  gale: {
+    id: 'gale',
+    name: '疾风',
+    subtitle: '操控型',
+    color: '#00ff66',
+    accentColor: '#009933',
+    baseMaxSpeed: 295,
+    baseAcceleration: 235,
+    steerSpeed: 3.5,
+    brakePower: 410,
+    baseOffTrackFriction: 2.8,
+    nitroMaxEnergy: 100,
+    nitroChargeRate: 20,
+    nitroSpeedBoost: 1.6,
+    nitroAccelBoost: 2.5,
+    wheelBase: 22,
+    bikeWidth: 12,
+    description: '灵活操控，弯道之王',
+    stats: { speed: 2, accel: 4, handling: 5, nitro: 3 }
+  },
+  shark: {
+    id: 'shark',
+    name: '狂鲨',
+    subtitle: '氮气型',
+    color: '#ffff00',
+    accentColor: '#aa8800',
+    baseMaxSpeed: 305,
+    baseAcceleration: 190,
+    steerSpeed: 2.5,
+    brakePower: 320,
+    baseOffTrackFriction: 3.8,
+    nitroMaxEnergy: 150,
+    nitroChargeRate: 28,
+    nitroSpeedBoost: 1.8,
+    nitroAccelBoost: 3.0,
+    wheelBase: 26,
+    bikeWidth: 15,
+    description: '氮气强劲，爆发力十足',
+    stats: { speed: 2, accel: 3, handling: 2, nitro: 5 }
+  }
+};
+
+const VehicleTypeKeys = Object.keys(VehicleTypes);
 
 const DifficultySettings = {
   easy: {
@@ -11,44 +97,44 @@ const DifficultySettings = {
     color: '#00ff66',
     aiCount: 2,
     aiDifficulties: ['easy', 'easy'],
-    playerMaxSpeed: 340,
-    playerAcceleration: 230,
     playerGridIndex: 0,
-    collisionDamage: 0.8,
-    offTrackFriction: 2.5
+    speedMultiplier: 1.0625,
+    accelMultiplier: 1.15,
+    offTrackFrictionBonus: -1.0,
+    collisionDamage: 0.8
   },
   normal: {
     label: '普通',
     color: '#00f5ff',
     aiCount: 3,
     aiDifficulties: ['medium', 'medium', 'easy'],
-    playerMaxSpeed: 320,
-    playerAcceleration: 200,
     playerGridIndex: 1,
-    collisionDamage: 0.7,
-    offTrackFriction: 3.5
+    speedMultiplier: 1.0,
+    accelMultiplier: 1.0,
+    offTrackFrictionBonus: 0,
+    collisionDamage: 0.7
   },
   hard: {
     label: '困难',
     color: '#ff6600',
     aiCount: 3,
     aiDifficulties: ['hard', 'medium', 'medium'],
-    playerMaxSpeed: 310,
-    playerAcceleration: 190,
     playerGridIndex: 2,
-    collisionDamage: 0.6,
-    offTrackFriction: 4.5
+    speedMultiplier: 0.96875,
+    accelMultiplier: 0.95,
+    offTrackFrictionBonus: 1.0,
+    collisionDamage: 0.6
   },
   hell: {
     label: '地狱',
     color: '#ff0044',
     aiCount: 4,
     aiDifficulties: ['hell', 'hard', 'hard', 'medium'],
-    playerMaxSpeed: 300,
-    playerAcceleration: 180,
     playerGridIndex: 4,
-    collisionDamage: 0.5,
-    offTrackFriction: 5.5
+    speedMultiplier: 0.9375,
+    accelMultiplier: 0.9,
+    offTrackFrictionBonus: 2.0,
+    collisionDamage: 0.5
   }
 };
 
@@ -70,7 +156,9 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 4;
+    this.menuItemCount = 5;
+    this.selectedVehicle = this._loadVehicleSelection();
+    this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
 
     this.track = null;
     this.player = null;
@@ -96,6 +184,7 @@ class Game {
     this.collision = new Collision(this.track);
 
     const cfg = DifficultySettings[this.difficulty];
+    const vehicle = VehicleTypes[this.selectedVehicle];
     const totalBikes = cfg.aiCount + 1;
     const startPositions = this.track.getStartPositions(totalBikes, 60);
 
@@ -103,27 +192,39 @@ class Game {
       startPositions[cfg.playerGridIndex].x,
       startPositions[cfg.playerGridIndex].y,
       startPositions[cfg.playerGridIndex].angle,
-      '#00f5ff',
+      vehicle.color,
       true
     );
-    this.player.maxSpeed = cfg.playerMaxSpeed;
-    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
-    this.player.acceleration = cfg.playerAcceleration;
-    this.player.baseAcceleration = cfg.playerAcceleration;
-    this.player.offTrackFriction = cfg.offTrackFriction;
+    this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
     this.collision.damageMultiplier = cfg.collisionDamage;
 
     this.aiBikes = [];
     this._createAIBikes(startPositions, cfg);
 
     this.aiBikes.forEach(ai => {
-      ai.offTrackFriction = cfg.offTrackFriction;
+      ai.offTrackFriction = vehicle.baseOffTrackFriction + cfg.offTrackFrictionBonus;
     });
 
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
 
     this._setupTouchControls();
+  }
+
+  _applyVehicleAndDifficulty(player, vehicle, cfg) {
+    player.maxSpeed = vehicle.baseMaxSpeed * cfg.speedMultiplier;
+    player.baseMaxSpeed = player.maxSpeed;
+    player.acceleration = vehicle.baseAcceleration * cfg.accelMultiplier;
+    player.baseAcceleration = player.acceleration;
+    player.offTrackFriction = vehicle.baseOffTrackFriction + cfg.offTrackFrictionBonus;
+    player.steerSpeed = vehicle.steerSpeed;
+    player.brakePower = vehicle.brakePower;
+    player.nitroMaxEnergy = vehicle.nitroMaxEnergy;
+    player.nitroChargeRate = vehicle.nitroChargeRate;
+    player.nitroSpeedBoost = vehicle.nitroSpeedBoost;
+    player.nitroAccelBoost = vehicle.nitroAccelBoost;
+    player.wheelBase = vehicle.wheelBase;
+    player.width = vehicle.bikeWidth;
   }
 
   _createAIBikes(startPositions, cfg) {
@@ -203,6 +304,8 @@ class Game {
     this.canvas.addEventListener('click', (e) => {
       if (this.state === GameState.MENU) {
         this._handleMenuClick(e);
+      } else if (this.state === GameState.VEHICLE_SELECT) {
+        this._handleVehicleSelectClick(e);
       } else if (this.state === GameState.FINISHED) {
         this.startGame();
       }
@@ -347,35 +450,40 @@ class Game {
     const y = e.clientY - rect.top;
 
     const centerX = this.canvas.width / 2;
-    const panelX = centerX - 200;
-    const panelY = this.canvas.height / 2 - 20;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
 
-    const itemY0 = panelY + 75;
-    const itemY1 = panelY + 135;
-    const itemY2 = panelY + 195;
-    const itemY3 = panelY + 270;
+    const panelW = isPortrait ? Math.min(320 * uiScale, this.canvas.width * 0.85) : 400;
+    const panelX = centerX - panelW / 2;
+    const titleY = isPortrait ? this.canvas.height / 2 * 0.5 : this.canvas.height / 2 - 130;
+    const panelY = isPortrait ? titleY + 80 * uiScale : this.canvas.height / 2 - 20;
 
-    if (x >= panelX && x <= panelX + 400) {
-      if (y >= itemY0 && y < itemY0 + 50) {
+    const itemSpacing = isPortrait ? 48 * uiScale : 52;
+    const btnOffset0 = isPortrait ? 55 * uiScale : 68;
+    const itemY0 = panelY + btnOffset0;
+    const itemY1 = itemY0 + itemSpacing;
+    const itemY2 = itemY1 + itemSpacing;
+    const itemY3 = itemY2 + itemSpacing + 8 * uiScale;
+    const itemY4 = itemY3 + itemSpacing;
+
+    if (x >= panelX && x <= panelX + panelW) {
+      if (y >= itemY0 && y < itemY0 + 45) {
         this.menuCursor = 0;
-        if (x < centerX - 20) {
-          this._changeDifficulty(-1);
-        } else if (x > centerX + 20) {
-          this._changeDifficulty(1);
-        }
-      } else if (y >= itemY1 && y < itemY1 + 50) {
+        if (x < centerX - 20) this._changeDifficulty(-1);
+        else if (x > centerX + 20) this._changeDifficulty(1);
+      } else if (y >= itemY1 && y < itemY1 + 45) {
         this.menuCursor = 1;
-        if (x < centerX - 20) {
-          this._changeLaps(-1);
-        } else if (x > centerX + 20) {
-          this._changeLaps(1);
-        }
-      } else if (y >= itemY2 && y < itemY2 + 50) {
+        if (x < centerX - 20) this._changeLaps(-1);
+        else if (x > centerX + 20) this._changeLaps(1);
+      } else if (y >= itemY2 && y < itemY2 + 45) {
         this.menuCursor = 2;
+        this._openVehicleSelect();
+      } else if (y >= itemY3 && y < itemY3 + 45) {
+        this.menuCursor = 3;
         this._openSettingsPanel();
         this.touchManager.vibrate('menuSelect');
-      } else if (y >= itemY3 && y < itemY3 + 50) {
-        this.menuCursor = 3;
+      } else if (y >= itemY4 && y < itemY4 + 45) {
+        this.menuCursor = 4;
         this.startGame();
       }
     }
@@ -416,6 +524,9 @@ class Game {
       case GameState.MENU:
         this._updateMenu();
         break;
+      case GameState.VEHICLE_SELECT:
+        this._updateVehicleSelect();
+        break;
       case GameState.COUNTDOWN:
         this._updateCountdown(dt);
         break;
@@ -446,16 +557,174 @@ class Game {
       if (this.input.isMenuRight()) this._changeLaps(1);
     } else if (this.menuCursor === 2) {
       if (this.input.isMenuConfirm()) {
+        this._openVehicleSelect();
+      }
+    } else if (this.menuCursor === 3) {
+      if (this.input.isMenuConfirm()) {
         this._openSettingsPanel();
         this.touchManager.vibrate('menuSelect');
       }
-    } else if (this.menuCursor === 3) {
+    } else if (this.menuCursor === 4) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
     }
 
     this.input.clearJustPressed();
+  }
+
+  _openVehicleSelect() {
+    this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
+    this.state = GameState.VEHICLE_SELECT;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _updateVehicleSelect() {
+    if (this.input.isMenuUp()) {
+      this.vehicleSelectCursor = (this.vehicleSelectCursor - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.vehicleSelectCursor = (this.vehicleSelectCursor + 1) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuLeft()) {
+      this.vehicleSelectCursor = (this.vehicleSelectCursor - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuRight()) {
+      this.vehicleSelectCursor = (this.vehicleSelectCursor + 1) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuConfirm()) {
+      this._confirmVehicleSelection();
+    }
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
+  }
+
+  _confirmVehicleSelection() {
+    this.selectedVehicle = VehicleTypeKeys[this.vehicleSelectCursor];
+    this._saveVehicleSelection(this.selectedVehicle);
+    this.state = GameState.MENU;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _handleVehicleSelectClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    if (this._checkVehicleButtonClick(x, y, isPortrait, uiScale, centerX)) {
+      return;
+    }
+
+    if (this._checkVehiclePreviewClick(x, y, isPortrait, uiScale, centerX)) {
+      return;
+    }
+
+    if (this._checkVehicleListClick(x, y, isPortrait, uiScale, centerX)) {
+      return;
+    }
+  }
+
+  _checkVehiclePreviewClick(x, y, isPortrait, uiScale, centerX) {
+    let previewX, previewY, previewW, previewH;
+
+    if (isPortrait) {
+      previewH = 200 * uiScale;
+      previewY = 70 * uiScale;
+      previewW = Math.min(340 * uiScale, this.canvas.width * 0.9);
+      previewX = centerX - previewW / 2;
+    } else {
+      previewX = 60;
+      previewY = 100;
+      previewW = 380;
+      previewH = this.canvas.height - 200;
+    }
+
+    if (x >= previewX && x <= previewX + previewW && y >= previewY && y <= previewY + previewH) {
+      this._confirmVehicleSelection();
+      return true;
+    }
+    return false;
+  }
+
+  _checkVehicleButtonClick(x, y, isPortrait, uiScale, centerX) {
+    const btnH = isPortrait ? 40 * uiScale : 44;
+    const btnY = isPortrait ? this.canvas.height - 75 * uiScale : this.canvas.height - 65;
+    const totalBtnW = isPortrait ? 280 * uiScale : 320;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (totalBtnW - btnGap) / 2;
+    const btnX = centerX - totalBtnW / 2;
+
+    const cancelX = btnX;
+    const confirmX = btnX + btnW + btnGap;
+
+    if (y >= btnY && y <= btnY + btnH) {
+      if (x >= cancelX && x <= cancelX + btnW) {
+        this.state = GameState.MENU;
+        this.touchManager.vibrate('menuSelect');
+        return true;
+      }
+      if (x >= confirmX && x <= confirmX + btnW) {
+        this._confirmVehicleSelection();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _checkVehicleListClick(x, y, isPortrait, uiScale, centerX) {
+    let listX, listY, listW, listH;
+
+    if (isPortrait) {
+      const previewH = 200 * uiScale;
+      const previewY = 70 * uiScale;
+      const previewW = Math.min(340 * uiScale, this.canvas.width * 0.9);
+      listY = previewY + previewH + 15 * uiScale;
+      listH = this.canvas.height - listY - 100 * uiScale;
+      listW = Math.min(360 * uiScale, this.canvas.width * 0.92);
+      listX = centerX - listW / 2;
+    } else {
+      const previewPanelX = 60;
+      const previewPanelW = 380;
+      listX = previewPanelX + previewPanelW + 30;
+      listY = 100;
+      listW = this.canvas.width - listX - 60;
+      listH = this.canvas.height - 180;
+    }
+
+    if (x < listX || x > listX + listW || y < listY || y > listY + listH) {
+      return false;
+    }
+
+    const itemCount = VehicleTypeKeys.length;
+    const itemGap = isPortrait ? 8 * uiScale : 10;
+    const itemH = isPortrait ? 58 * uiScale : 65;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = listY + 50 + (listH - 60 - totalItemH) / 2;
+
+    for (let i = 0; i < VehicleTypeKeys.length; i++) {
+      const iy = startY + i * (itemH + itemGap);
+      const itemX = listX + 12;
+      const itemW = listW - 24;
+
+      if (x >= itemX && x <= itemX + itemW && y >= iy && y <= iy + itemH) {
+        this.vehicleSelectCursor = i;
+        this.touchManager.vibrate('menuSelect');
+        return true;
+      }
+    }
+
+    return false;
   }
 
   startGame() {
@@ -468,17 +737,14 @@ class Game {
 
   _applySettings() {
     const cfg = DifficultySettings[this.difficulty];
-    this.player.maxSpeed = cfg.playerMaxSpeed;
-    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
-    this.player.acceleration = cfg.playerAcceleration;
-    this.player.baseAcceleration = cfg.playerAcceleration;
-    this.player.offTrackFriction = cfg.offTrackFriction;
-    this.collision.damageMultiplier = cfg.collisionDamage;
+    const vehicle = VehicleTypes[this.selectedVehicle];
+    this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
     this.totalLaps = LapOptions[this.lapIndex];
   }
 
   _resetRace() {
     const cfg = DifficultySettings[this.difficulty];
+    const vehicle = VehicleTypes[this.selectedVehicle];
     const totalBikes = cfg.aiCount + 1;
     const startPositions = this.track.getStartPositions(totalBikes, 60);
 
@@ -487,18 +753,15 @@ class Game {
       startPositions[cfg.playerGridIndex].y,
       startPositions[cfg.playerGridIndex].angle
     );
-    this.player.maxSpeed = cfg.playerMaxSpeed;
-    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
-    this.player.acceleration = cfg.playerAcceleration;
-    this.player.baseAcceleration = cfg.playerAcceleration;
-    this.player.offTrackFriction = cfg.offTrackFriction;
+    this.player.color = vehicle.color;
+    this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
     this.collision.damageMultiplier = cfg.collisionDamage;
 
     this.aiBikes = [];
     this._createAIBikes(startPositions, cfg);
 
     this.aiBikes.forEach(ai => {
-      ai.offTrackFriction = cfg.offTrackFriction;
+      ai.offTrackFriction = vehicle.baseOffTrackFriction + cfg.offTrackFrictionBonus;
     });
 
     this.raceTime = 0;
@@ -654,7 +917,7 @@ class Game {
   _updateFinished() {
     if (this.input.isMenuConfirm()) {
       this.state = GameState.MENU;
-      this.menuCursor = 3;
+      this.menuCursor = 4;
       this.input.clearJustPressed();
     }
   }
@@ -672,6 +935,11 @@ class Game {
 
     if (this.state === GameState.MENU) {
       this.renderer.drawMenu(this);
+      return;
+    }
+
+    if (this.state === GameState.VEHICLE_SELECT) {
+      this.renderer.drawVehicleSelect(this);
       return;
     }
 
@@ -707,6 +975,20 @@ class Game {
     if (this.touchManager.updateOrientation()) {
       this.touchManager.applyLayout();
     }
+  }
+
+  _loadVehicleSelection() {
+    try {
+      const data = localStorage.getItem('neonRacer_selectedVehicle');
+      if (data && VehicleTypes[data]) return data;
+    } catch (e) {}
+    return 'phantom';
+  }
+
+  _saveVehicleSelection(vehicleId) {
+    try {
+      localStorage.setItem('neonRacer_selectedVehicle', vehicleId);
+    } catch (e) {}
   }
 
   _loadBestLapRecords() {
