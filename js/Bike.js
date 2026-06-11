@@ -21,6 +21,13 @@ class Bike {
     this.finished = false;
     this.bestLapTime = Infinity;
     this.lastLapTime = 0;
+    this.currentRouteId = 'main';
+    this.routeCheckpoints = new Map();
+    this.routeChangeCooldown = 0;
+    this.takenRoutes = [];
+    this.activeBranchHint = null;
+    this.selectedRouteAtBranch = null;
+    this.branchChoiceLocked = false;
 
     this.wheelBase = 24;
     this.width = 14;
@@ -32,6 +39,10 @@ class Bike {
   update(dt, input, track) {
     if (this.finished) return;
 
+    if (this.routeChangeCooldown > 0) {
+      this.routeChangeCooldown -= dt;
+    }
+
     if (input.accel) {
       this.speed = Math.min(this.speed + this.acceleration * dt, this.maxSpeed);
     }
@@ -39,7 +50,7 @@ class Bike {
       this.speed = Math.max(this.speed - this.brakePower * dt, -this.maxSpeed * 0.3);
     }
 
-    const trackOffset = track.getTrackOffset(this.x, this.y);
+    const trackOffset = track.getTrackOffset(this.x, this.y, this.currentRouteId);
     const isOnTrack = Math.abs(trackOffset.offset) <= track.width / 2;
 
     const friction = isOnTrack ? this.friction : this.offTrackFriction;
@@ -145,6 +156,13 @@ class Bike {
     this.checkpoint = 0;
     this.raceTime = 0;
     this.finished = false;
+    this.currentRouteId = 'main';
+    this.routeCheckpoints = new Map();
+    this.routeChangeCooldown = 0;
+    this.takenRoutes = [];
+    this.activeBranchHint = null;
+    this.selectedRouteAtBranch = null;
+    this.branchChoiceLocked = false;
     this.skidMarks = [];
     this.particles = [];
   }

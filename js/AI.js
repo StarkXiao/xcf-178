@@ -8,6 +8,9 @@ class AIBike extends Bike {
     this.targetPoint = null;
     this.progressDistance = 0;
     this.correctionTimer = 0;
+    this.routeChangeTimer = 0;
+    this.preferredRoute = null;
+    this.targetRouteId = null;
 
     this._setDifficultyParams();
   }
@@ -62,7 +65,12 @@ class AIBike extends Bike {
       return;
     }
 
+    if (this.routeChangeTimer > 0) {
+      this.routeChangeTimer -= dt;
+    }
+
     this._updateProgress(track);
+    this._updateRouteDecision(track, bikes);
     const input = this._calculateInput(track, bikes);
     super.update(dt, input, track);
 
@@ -70,12 +78,109 @@ class AIBike extends Bike {
   }
 
   _updateProgress(track) {
-    const result = track.getDistanceAlongTrack(this.x, this.y);
-    if (result.distance > this.progressDistance - track.totalLength * 0.5) {
+    const result = track.getDistanceAlongTrack(this.x, this.y, this.currentRouteId);
+    const route = track.getRoute(this.currentRouteId);
+    if (result.distance > this.progressDistance - route.totalLength * 0.5) {
       this.progressDistance = result.distance;
-    } else if (result.distance > this.progressDistance + track.totalLength * 0.5) {
+    } else if (result.distance > this.progressDistance + route.totalLength * 0.5) {
       this.progressDistance = result.distance;
     }
+  }
+
+  _updateRouteDecision(track, bikes) {
+    if (this.routeChangeTimer > 0) return;
+
+    const currentRoute = track.getRoute(this.currentRouteId);
+    const currentDist = this.progressDistance;
+
+    const nearestBranch = track.getNearestBranchPoint(this.x, this.y, currentDist);
+
+    if (nearestBranch && !this.branchChoiceLocked) {
+      const distToBranch = Utils.distance(this.x, this.y, nearestBranch.position.x, nearestBranch.position.y);
+
+      if (distToBranch < 150) {
+        this._decideRoute(track, nearestBranch, bikes);
+      }
+    }
+
+    if (this.targetRouteId && this.targetRouteId !== this.currentRouteId) {
+      const targetRoute = track.getRoute(this.targetRouteId);
+      const targetDist = targetRoute.getDistanceAlongTrack(this.x, this.y).distance;
+      const targetPoint = targetRoute.getPointAtDistance(targetDist + 80);
+
+      const dx = targetPoint.x - this.x;
+      const dy = targetPoint.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 60) {
+        this.currentRouteId = this.targetRouteId;
+        this.targetRouteId = null;
+        this.routeChangeTimer = 2.0;
+        this.branchChoiceLocked = true;
+        if (!this.takenRoutes.includes(this.currentRouteId)) {
+          this.takenRoutes.push(this.currentRouteId);
+        }
+      }
+    }
+  }
+
+  _decideRoute(track, branchPoint, bikes) {
+    const availableOptions = branchPoint.routes;
+
+    let bestOption = null;
+    let bestScore = -Infinity;
+
+    for (const option of availableOptions) {
+      let score = 0;
+
+      if (option.routeId === this.currentRouteId) {
+        score += 10;
+      }
+
+      if (option.lengthBonus) {
+        const advantage = (1 - option.lengthBonus) * 100;
+        score += advantage * this.aggression;
+      }
+
+      const route = track.getRoute(option.routeId);
+      if (route.isShortcut) {
+        if (this.aggression > 0.6) {
+          score += 30;
+        } else if (this.aggression < 0.4) {
+          score -= 20;
+        }
+      }
+
+      const myRank = this._getMyRank(bikes);
+      if (myRank > 2 && route.isShortcut) {
+        score += 40;
+      }
+
+      const randomFactor = Utils.randomRange(-10, 10);
+      score += randomFactor;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestOption = option;
+      }
+    }
+
+    if (bestOption && bestOption.routeId !== this.currentRouteId) {
+      this.targetRouteId = bestOption.routeId;
+      this.preferredRoute = bestOption;
+    } else {
+      this.targetRouteId = null;
+      this.preferredRoute = null;
+    }
+  }
+
+  _getMyRank(bikes) {
+    const sorted = [...bikes].sort((a, b) => {
+      const progressA = a.lap + a.checkpoint / 8;
+      const progressB = b.lap + b.checkpoint / 8;
+      return progressB - progressA;
+    });
+    return sorted.findIndex(b => b === this) + 1;
   }
 
   _calculateInput(track, bikes) {
@@ -89,10 +194,22 @@ class AIBike extends Bike {
       speedRatio * this.aggression
     );
 
-    const currentDist = track.getDistanceAlongTrack(this.x, this.y).distance;
-    const targetDist = currentDist + lookAhead;
+    let targetPoint;
+    let trackAngle;
 
-    this.targetPoint = track.getPointAtDistance(targetDist);
+    if (this.targetRouteId && this.targetRouteId !== this.currentRouteId) {
+      const targetRoute = track.getRoute(this.targetRouteId);
+      const targetDist = targetRoute.getDistanceAlongTrack(this.x, this.y).distance;
+      targetPoint = targetRoute.getPointAtDistance(targetDist + lookAhead * 0.6);
+      trackAngle = targetRoute.getPointAtDistance(targetDist).angle;
+    } else {
+      const currentDist = track.getDistanceAlongTrack(this.x, this.y, this.currentRouteId).distance;
+      const targetDist = currentDist + lookAhead;
+      targetPoint = track.getPointAtDistance(targetDist, this.currentRouteId);
+      trackAngle = track.getPointAtDistance(currentDist, this.currentRouteId).angle;
+    }
+
+    this.targetPoint = targetPoint;
 
     const dx = this.targetPoint.x - this.x;
     const dy = this.targetPoint.y - this.y;
@@ -100,11 +217,11 @@ class AIBike extends Bike {
 
     let angleDiff = Utils.angleDifference(targetAngle, this.angle);
 
-    const trackOffset = track.getTrackOffset(this.x, this.y);
+    const activeRouteId = this.targetRouteId || this.currentRouteId;
+    const trackOffset = track.getTrackOffset(this.x, this.y, activeRouteId);
     const halfWidth = track.width / 2;
     const offsetRatio = trackOffset.offset / halfWidth;
 
-    const trackAngle = track.getPointAtDistance(currentDist).angle;
     const parallelToTrack = Math.abs(Utils.angleDifference(this.angle, trackAngle));
     const correctionStrength = parallelToTrack > 1.0 ? 0.5 : 0.15;
 
@@ -122,11 +239,18 @@ class AIBike extends Bike {
     }
 
     const cornerSharpness = Math.abs(angleDiff);
-    const lookFarPoint = track.getPointAtDistance(currentDist + lookAhead * 1.8);
+    const lookFarDist = (this.targetRouteId ? 
+      track.getRoute(this.targetRouteId).getDistanceAlongTrack(this.x, this.y).distance :
+      track.getDistanceAlongTrack(this.x, this.y, this.currentRouteId).distance);
+    const lookFarPoint = track.getPointAtDistance(lookFarDist + lookAhead * 1.8, activeRouteId);
     const futureAngle = Math.atan2(lookFarPoint.y - this.y, lookFarPoint.x - this.x);
     const futureAngleDiff = Math.abs(Utils.angleDifference(futureAngle, this.angle));
 
     let brakeThreshold = 0.6 + (1 - this.aggression) * 0.25;
+
+    if (this.targetRouteId && this.targetRouteId !== this.currentRouteId) {
+      brakeThreshold *= 0.8;
+    }
 
     if (futureAngleDiff > brakeThreshold && speedRatio > 0.45) {
       input.brake = true;
@@ -161,8 +285,9 @@ class AIBike extends Bike {
     if (Math.abs(this.speed) < 15) {
       this.correctionTimer += dt;
       if (this.correctionTimer > 1.5) {
-        const currentDist = track.getDistanceAlongTrack(this.x, this.y).distance;
-        const aheadPoint = track.getPointAtDistance(currentDist + 30);
+        const activeRouteId = this.targetRouteId || this.currentRouteId;
+        const currentDist = track.getDistanceAlongTrack(this.x, this.y, activeRouteId).distance;
+        const aheadPoint = track.getPointAtDistance(currentDist + 30, activeRouteId);
         this.x = Utils.lerp(this.x, aheadPoint.x, 0.3);
         this.y = Utils.lerp(this.y, aheadPoint.y, 0.3);
         this.angle = aheadPoint.angle;

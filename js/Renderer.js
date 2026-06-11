@@ -44,17 +44,86 @@ class Renderer {
 
   drawTrack(track) {
     const ctx = this.ctx;
+    const routes = track.getAllRoutes();
+
+    routes.forEach(route => {
+      if (route.id === 'main') return;
+
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = route.color;
+
+      ctx.beginPath();
+      ctx.lineWidth = track.width * 0.7 + 6;
+      ctx.strokeStyle = route.color + '40';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      route.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+
+      ctx.beginPath();
+      ctx.lineWidth = track.width * 0.7;
+      ctx.strokeStyle = '#1a1a2e';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      route.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.lineWidth = track.width * 0.65;
+      ctx.strokeStyle = '#252540';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      route.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = route.color;
+
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = route.color;
+      ctx.setLineDash(route.isShortcut ? [8, 12] : [12, 12]);
+
+      route.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.shadowBlur = 0;
+    });
+
+    const mainRoute = track.getRoute('main');
 
     ctx.shadowBlur = 20;
-    ctx.shadowColor = '#00f5ff';
+    ctx.shadowColor = mainRoute.color;
 
     ctx.beginPath();
     ctx.lineWidth = track.width + 8;
-    ctx.strokeStyle = 'rgba(0, 245, 255, 0.3)';
+    ctx.strokeStyle = mainRoute.color + '4D';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    track.points.forEach((p, i) => {
+    mainRoute.points.forEach((p, i) => {
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     });
@@ -69,7 +138,7 @@ class Renderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    track.points.forEach((p, i) => {
+    mainRoute.points.forEach((p, i) => {
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     });
@@ -82,7 +151,7 @@ class Renderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    track.points.forEach((p, i) => {
+    mainRoute.points.forEach((p, i) => {
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     });
@@ -97,7 +166,7 @@ class Renderer {
     ctx.strokeStyle = '#ff00ff';
     ctx.setLineDash([15, 15]);
 
-    track.points.forEach((p, i) => {
+    mainRoute.points.forEach((p, i) => {
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     });
@@ -107,7 +176,246 @@ class Renderer {
     ctx.setLineDash([]);
     ctx.shadowBlur = 0;
 
+    this._drawBranchPoints(track);
+    this._drawRouteLabels(track);
     this._drawStartFinish(track);
+  }
+
+  _drawBranchPoints(track) {
+    const ctx = this.ctx;
+
+    track.branchPoints.forEach(bp => {
+      const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = '#ffff00';
+
+      ctx.beginPath();
+      ctx.arc(bp.position.x, bp.position.y, 25 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 0, ${0.2 * pulse})`;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(bp.position.x, bp.position.y, 18, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+
+      bp.routes.forEach((route, idx) => {
+        const angle = (idx / bp.routes.length) * Math.PI * 2 - Math.PI / 2;
+        const dist = 45;
+        const x = bp.position.x + Math.cos(angle) * dist;
+        const y = bp.position.y + Math.sin(angle) * dist;
+
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = route.color;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fillStyle = route.color;
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(idx + 1, x, y);
+
+        ctx.shadowBlur = 0;
+      });
+    });
+  }
+
+  _drawRouteLabels(track) {
+    const ctx = this.ctx;
+    const routes = track.getAllRoutes();
+
+    routes.forEach(route => {
+      if (route.id === 'main') return;
+
+      const midDist = route.totalLength * 0.5;
+      const midPoint = route.getPointAtDistance(midDist);
+
+      ctx.save();
+      ctx.translate(midPoint.x, midPoint.y);
+      ctx.rotate(midPoint.angle);
+
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = route.color;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(-60, -18, 120, 36);
+
+      ctx.strokeStyle = route.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-60, -18, 120, 36);
+
+      ctx.fillStyle = route.color;
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(route.name, 0, 0);
+
+      if (route.isShortcut) {
+        ctx.fillStyle = '#ffff00';
+        ctx.font = '10px monospace';
+        ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, 0, 14);
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    });
+  }
+
+  drawRouteHints(track, player) {
+    const ctx = this.ctx;
+
+    if (!player.activeBranchHint) return;
+
+    const bp = player.activeBranchHint;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const centerX = this.width / 2;
+    const centerY = this.height - 180;
+
+    const panelWidth = 320;
+    const panelHeight = 80 + bp.routes.length * 45;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffff00';
+    ctx.beginPath();
+    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ 前方分支路口', centerX, centerY - panelHeight / 2 + 35);
+
+    bp.routes.forEach((route, idx) => {
+      const itemY = centerY - panelHeight / 2 + 70 + idx * 45;
+      const isCurrentRoute = route.routeId === player.currentRouteId;
+      const isRecommended = player.selectedRouteAtBranch && 
+                          player.selectedRouteAtBranch.routeId === route.routeId;
+
+      ctx.fillStyle = isCurrentRoute ? 'rgba(0, 245, 255, 0.2)' : 'rgba(40, 40, 60, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(centerX - panelWidth / 2 + 15, itemY - 18, panelWidth - 30, 38, 8);
+      ctx.fill();
+
+      if (isRecommended) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(centerX - panelWidth / 2 + 15, itemY - 18, panelWidth - 30, 38, 8);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = route.color;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = route.color;
+      ctx.beginPath();
+      ctx.arc(centerX - panelWidth / 2 + 35, itemY, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(route.name, centerX - panelWidth / 2 + 55, itemY + 4);
+
+      ctx.fillStyle = '#888';
+      ctx.font = '10px monospace';
+      ctx.fillText(route.hint, centerX - panelWidth / 2 + 120, itemY + 4);
+
+      if (route.lengthBonus && route.lengthBonus < 1.0) {
+        ctx.fillStyle = '#00ff00';
+        ctx.textAlign = 'right';
+        ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, centerX + panelWidth / 2 - 25, itemY + 4);
+      }
+
+      if (isRecommended) {
+        ctx.fillStyle = '#00ff00';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('推荐', centerX + panelWidth / 2 - 75, itemY + 4);
+      }
+
+      if (isCurrentRoute) {
+        ctx.fillStyle = '#00f5ff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('当前', centerX + panelWidth / 2 - 110, itemY + 4);
+      }
+    });
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('转向选择路线，保持直行则维持当前路线', centerX, centerY + panelHeight / 2 - 20);
+
+    ctx.restore();
+  }
+
+  drawCurrentRouteIndicator(player) {
+    const ctx = this.ctx;
+    const route = player.currentRouteId ? 
+      (this.track ? this.track.getRoute(player.currentRouteId) : null) : null;
+
+    if (!route) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const x = this.width - 200;
+    const y = this.height - 210;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, 180, 45, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = route.color;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = route.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, 180, 45, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('当前路线', x + 12, y + 16);
+
+    ctx.fillStyle = route.color;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = route.color;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(route.name, x + 12, y + 34);
+    ctx.shadowBlur = 0;
+
+    if (route.isShortcut) {
+      ctx.fillStyle = '#00ff00';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, x + 168, y + 34);
+    }
+
+    ctx.restore();
   }
 
   _drawStartFinish(track) {
@@ -255,13 +563,18 @@ class Renderer {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+    this.track = game.track;
+
     this._drawSpeedometer(game.player, padding, this.height - 120);
     this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
     this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
     this._drawRankings(game.getRankings(), padding, padding);
     this._drawDifficultyBadge(game.difficulty, this.width - padding - 180, padding + 95);
+    this.drawCurrentRouteIndicator(game.player);
 
     ctx.restore();
+
+    this.drawRouteHints(game.track, game.player);
   }
 
   _drawSpeedometer(player, x, y) {
@@ -312,7 +625,9 @@ class Renderer {
   _drawLapInfo(player, totalLaps, x, y) {
     const ctx = this.ctx;
     const displayLap = Math.min(player.lap + 1, totalLaps);
-    const lapProgress = (player.lap + (player.checkpoint + 1) / 8) / totalLaps;
+    const currentRoute = this.track ? this.track.getRoute(player.currentRouteId) : null;
+    const numCheckpoints = currentRoute ? currentRoute.checkpoints.length : 6;
+    const lapProgress = (player.lap + (player.checkpoint + 1) / numCheckpoints) / totalLaps;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
@@ -335,7 +650,7 @@ class Renderer {
 
     ctx.fillStyle = '#888';
     ctx.font = '12px monospace';
-    ctx.fillText(`Checkpoint: ${player.checkpoint + 1}/8`, x + 90, y + 52);
+    ctx.fillText(`Checkpoint: ${player.checkpoint + 1}/${numCheckpoints}`, x + 90, y + 52);
 
     const barWidth = 150;
     const barHeight = 6;
@@ -444,6 +759,14 @@ class Renderer {
 
       ctx.fillStyle = bike.isPlayer ? '#ffffff' : '#aaa';
       ctx.fillText(bike.isPlayer ? 'YOU' : `AI${i}`, x + 65, rankY);
+
+      if (this.track && bike.currentRouteId && bike.currentRouteId !== 'main') {
+        const route = this.track.getRoute(bike.currentRouteId);
+        if (route) {
+          ctx.fillStyle = route.color;
+          ctx.fillRect(x + 115, rankY - 10, 8, 12);
+        }
+      }
 
       if (bike.finished) {
         ctx.fillStyle = '#00ff00';

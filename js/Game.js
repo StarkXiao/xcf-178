@@ -358,7 +358,9 @@ class Game {
 
     this.player.update(dt, playerInput, this.track);
     this.collision.checkTrackCollision(this.player);
+    this.collision.updateRouteTracking(this.player);
     this.collision.updateCheckpoints(this.player);
+    this.collision.updateBranchHints(this.player);
 
     if (this.player.lap >= this.totalLaps && !this.player.finished) {
       this.player.finished = true;
@@ -371,7 +373,9 @@ class Game {
       }
       ai.update(dt, this.track, this.getAllBikes());
       this.collision.checkTrackCollision(ai);
+      this.collision.updateRouteTracking(ai);
       this.collision.updateCheckpoints(ai);
+      this.collision.updateBranchHints(ai);
       if (ai.lap >= this.totalLaps && !ai.finished) {
         ai.finished = true;
         ai.raceTime = this.raceTime;
