@@ -5,7 +5,9 @@ class Bike {
     this.angle = angle;
     this.speed = 0;
     this.maxSpeed = 320;
+    this.baseMaxSpeed = 320;
     this.acceleration = 200;
+    this.baseAcceleration = 200;
     this.brakePower = 350;
     this.friction = 0.8;
     this.offTrackFriction = 3.5;
@@ -44,6 +46,20 @@ class Bike {
     this.obstacleHitCooldown = 0;
     this._addExplosionParticles = null;
     this._addHitParticles = null;
+
+    this.nitroEnergy = 0;
+    this.nitroMaxEnergy = 100;
+    this.nitroActive = false;
+    this.nitroDuration = 0;
+    this.nitroMaxDuration = 3.0;
+    this.nitroCooldown = 0;
+    this.nitroSpeedBoost = 1.6;
+    this.nitroAccelBoost = 2.5;
+    this.nitroChargeRate = 18;
+    this.nitroConsumeRate = 40;
+    this.nitroBurstTimer = 0;
+    this.nitroReadyPulse = 0;
+    this.prevNitroActive = false;
   }
 
   update(dt, input, track) {
@@ -56,11 +72,17 @@ class Bike {
       this.obstacleHitCooldown -= dt;
     }
 
+    this.prevNitroActive = this.nitroActive;
+    this._updateNitro(dt, input);
+
+    const currentAccel = this.acceleration * (this.nitroActive ? this.nitroAccelBoost : 1);
+    const currentMaxSpeed = this.baseMaxSpeed * (this.nitroActive ? this.nitroSpeedBoost : 1);
+
     if (input.accel) {
-      this.speed = Math.min(this.speed + this.acceleration * dt, this.maxSpeed);
+      this.speed = Math.min(this.speed + currentAccel * dt, currentMaxSpeed);
     }
     if (input.brake) {
-      this.speed = Math.max(this.speed - this.brakePower * dt, -this.maxSpeed * 0.3);
+      this.speed = Math.max(this.speed - this.brakePower * dt, -this.baseMaxSpeed * 0.3);
     }
 
     const trackOffset = track.getTrackOffset(this.x, this.y, this.currentRouteId);
@@ -69,7 +91,10 @@ class Bike {
     const friction = this.isOnTrack ? this.friction : this.offTrackFriction;
     this.speed *= 1 - friction * dt;
 
-    const speedRatio = Math.abs(this.speed) / this.maxSpeed;
+    const displayMaxSpeed = this.nitroActive ? currentMaxSpeed : this.baseMaxSpeed;
+    const speedRatio = Math.abs(this.speed) / displayMaxSpeed;
+    this.maxSpeed = displayMaxSpeed;
+
     let steerInput = 0;
     if (input.left) steerInput -= 1;
     if (input.right) steerInput += 1;
@@ -85,6 +110,10 @@ class Bike {
 
     this._addSkidMarks(this.isOnTrack, speedRatio, steerInput);
 
+    if (this.nitroActive) {
+      this._addNitroParticles();
+    }
+
     if (this._addExplosionParticles) {
       this._spawnExplosion(this._addExplosionParticles.x, this._addExplosionParticles.y, this._addExplosionParticles.color);
       this._addExplosionParticles = null;
@@ -95,6 +124,85 @@ class Bike {
     }
 
     this._updateParticles(dt);
+  }
+
+  _updateNitro(dt, input) {
+    if (this.nitroCooldown > 0) {
+      this.nitroCooldown -= dt;
+    }
+    if (this.nitroBurstTimer > 0) {
+      this.nitroBurstTimer -= dt;
+    }
+
+    const speedRatioForCharge = Math.abs(this.speed) / this.baseMaxSpeed;
+    if (!this.nitroActive && speedRatioForCharge > 0.2 && this.isOnTrack) {
+      const chargeAmount = this.nitroChargeRate * dt * (0.5 + speedRatioForCharge * 0.5 + this.driftFactor * 0.8);
+      this.nitroEnergy = Math.min(this.nitroEnergy + chargeAmount, this.nitroMaxEnergy);
+    }
+
+    if (this.nitroEnergy >= this.nitroMaxEnergy) {
+      this.nitroReadyPulse += dt * 4;
+    } else {
+      this.nitroReadyPulse = 0;
+    }
+
+    const wantNitro = input.nitro && this.nitroEnergy >= 25 && this.nitroCooldown <= 0;
+    if (wantNitro && !this.nitroActive) {
+      this.nitroActive = true;
+      this.nitroDuration = 0;
+      this.nitroBurstTimer = 0.4;
+    }
+
+    if (this.nitroActive) {
+      this.nitroDuration += dt;
+      this.nitroEnergy -= this.nitroConsumeRate * dt;
+
+      if (this.nitroEnergy <= 0 || !input.nitro) {
+        this.nitroActive = false;
+        this.nitroEnergy = Math.max(0, this.nitroEnergy);
+        this.nitroCooldown = 0.5;
+      }
+    }
+  }
+
+  _addNitroParticles() {
+    const rearX = this.x - Math.cos(this.angle) * this.wheelBase * 0.75;
+    const rearY = this.y - Math.sin(this.angle) * this.wheelBase * 0.75;
+
+    for (let i = 0; i < 3; i++) {
+      const spreadAngle = this.angle + Math.PI + Utils.randomRange(-0.4, 0.4);
+      const speed = Utils.randomRange(120, 220);
+      const nitroColors = ['#00f5ff', '#00ffff', '#66ffff', '#ffffff'];
+      const color = nitroColors[Math.floor(Math.random() * nitroColors.length)];
+
+      this.particles.push({
+        x: rearX + Utils.randomRange(-5, 5),
+        y: rearY + Utils.randomRange(-5, 5),
+        vx: Math.cos(spreadAngle) * speed,
+        vy: Math.sin(spreadAngle) * speed,
+        size: Utils.randomRange(6, 14),
+        life: 1,
+        maxLife: Utils.randomRange(0.25, 0.5),
+        color: color,
+        type: 'nitro'
+      });
+    }
+
+    if (Math.random() < 0.4) {
+      const smokeAngle = this.angle + Math.PI + Utils.randomRange(-0.2, 0.2);
+      const smokeSpeed = Utils.randomRange(40, 90);
+      this.particles.push({
+        x: rearX,
+        y: rearY,
+        vx: Math.cos(smokeAngle) * smokeSpeed,
+        vy: Math.sin(smokeAngle) * smokeSpeed,
+        size: Utils.randomRange(12, 25),
+        life: 1,
+        maxLife: Utils.randomRange(0.5, 1.0),
+        color: 'rgba(150, 200, 255, 0.4)',
+        type: 'nitroSmoke'
+      });
+    }
   }
 
   _updateDrift(steerInput, speedRatio, dt, isOnTrack) {
@@ -221,6 +329,14 @@ class Bike {
       } else if (p.type === 'spark') {
         p.vx *= 0.9;
         p.vy *= 0.9;
+      } else if (p.type === 'nitro') {
+        p.vx *= 0.9;
+        p.vy *= 0.9;
+        p.size += 5 * dt;
+      } else if (p.type === 'nitroSmoke') {
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.size += 25 * dt;
       } else {
         p.vx *= 0.95;
         p.vy *= 0.95;
@@ -243,6 +359,8 @@ class Bike {
     this.y = y;
     this.angle = angle;
     this.speed = 0;
+    this.maxSpeed = this.baseMaxSpeed;
+    this.acceleration = this.baseAcceleration;
     this.driftAngle = 0;
     this.driftFactor = 0;
     this.lap = 0;
@@ -268,5 +386,12 @@ class Bike {
     this.obstacleHitCooldown = 0;
     this._addExplosionParticles = null;
     this._addHitParticles = null;
+    this.nitroEnergy = 0;
+    this.nitroActive = false;
+    this.nitroDuration = 0;
+    this.nitroCooldown = 0;
+    this.nitroBurstTimer = 0;
+    this.nitroReadyPulse = 0;
+    this.prevNitroActive = false;
   }
 }

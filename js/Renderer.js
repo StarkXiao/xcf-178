@@ -621,11 +621,31 @@ class Renderer {
     ctx.translate(bike.x, bike.y);
     ctx.rotate(bike.angle + bike.driftAngle * 0.5);
 
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = bike.color;
-
     const wheelBase = bike.wheelBase;
     const halfWidth = bike.width / 2;
+
+    if (bike.nitroActive || bike.nitroBurstTimer > 0) {
+      const burstScale = bike.nitroBurstTimer > 0
+        ? 1 + (0.4 - bike.nitroBurstTimer) / 0.4 * 0.5
+        : 1;
+      const nitroGlowSize = (bike.nitroActive ? 40 : 20) * burstScale;
+
+      ctx.shadowBlur = nitroGlowSize;
+      ctx.shadowColor = '#00f5ff';
+
+      const glowGradient = ctx.createRadialGradient(-wheelBase * 0.3, 0, 0, -wheelBase * 0.3, 0, wheelBase * 1.5 * burstScale);
+      glowGradient.addColorStop(0, 'rgba(0, 245, 255, 0.4)');
+      glowGradient.addColorStop(0.5, 'rgba(0, 245, 255, 0.15)');
+      glowGradient.addColorStop(1, 'rgba(0, 245, 255, 0)');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(-wheelBase * 0.3, 0, wheelBase * 1.5 * burstScale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.shadowBlur = bike.nitroActive ? 30 : 15;
+    ctx.shadowColor = bike.nitroActive ? '#00ffff' : bike.color;
 
     ctx.fillStyle = bike.color;
     ctx.beginPath();
@@ -638,6 +658,12 @@ class Renderer {
     ctx.closePath();
     ctx.fill();
 
+    if (bike.nitroActive) {
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.3;
     ctx.beginPath();
@@ -645,32 +671,80 @@ class Renderer {
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    if (bike.speed > 30) {
-      const tailLength = Math.min(bike.speed * 0.3, 80);
-      const gradient = ctx.createLinearGradient(-wheelBase * 0.7, 0, -wheelBase * 0.7 - tailLength, 0);
-      gradient.addColorStop(0, bike.color);
-      gradient.addColorStop(1, 'transparent');
+    if (bike.speed > 20) {
+      const baseTail = bike.speed * 0.35;
+      const nitroMultiplier = bike.nitroActive ? 3.5 : 1;
+      const tailLength = Math.min(baseTail * nitroMultiplier, bike.nitroActive ? 300 : 90);
 
+      const tailStartAlpha = bike.nitroActive ? 0.9 : 0.6;
+      const tailWidth = bike.nitroActive ? halfWidth * 0.9 : halfWidth * 0.5;
+
+      const gradient = ctx.createLinearGradient(-wheelBase * 0.7, 0, -wheelBase * 0.7 - tailLength, 0);
+      if (bike.nitroActive) {
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.15, '#00ffff');
+        gradient.addColorStop(0.4, '#00f5ff');
+        gradient.addColorStop(0.7, 'rgba(0, 245, 255, 0.4)');
+        gradient.addColorStop(1, 'transparent');
+      } else {
+        gradient.addColorStop(0, bike.color);
+        gradient.addColorStop(1, 'transparent');
+      }
+
+      ctx.shadowBlur = bike.nitroActive ? 25 : 0;
+      ctx.shadowColor = '#00ffff';
       ctx.fillStyle = gradient;
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = tailStartAlpha;
       ctx.beginPath();
-      ctx.moveTo(-wheelBase * 0.5, -halfWidth * 0.5);
+      ctx.moveTo(-wheelBase * 0.5, -tailWidth);
       ctx.lineTo(-wheelBase * 0.7 - tailLength, 0);
-      ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.5);
+      ctx.lineTo(-wheelBase * 0.5, tailWidth);
       ctx.closePath();
       ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
+
+      if (bike.nitroActive) {
+        for (let flame = 0; flame < 3; flame++) {
+          const flameOffset = (Date.now() * 0.05 + flame * 50) % tailLength;
+          const flameAlpha = 1 - flameOffset / tailLength;
+          const flameSize = (8 + flame * 3) * flameAlpha;
+          const flameX = -wheelBase * 0.7 - flameOffset;
+          const flameY = Math.sin(Date.now() * 0.01 + flame * 2) * 5;
+
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = flame % 2 === 0 ? '#ffffff' : '#00ffff';
+          ctx.fillStyle = flame % 2 === 0 ? '#ffffff' : '#00ffff';
+          ctx.globalAlpha = flameAlpha * 0.8;
+          ctx.beginPath();
+          ctx.arc(flameX, flameY, flameSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
     }
 
     ctx.shadowBlur = 0;
 
     if (bike.isPlayer) {
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
+      const ringColor = bike.nitroActive ? '#00ffff' : '#ffffff';
+      const ringPulse = bike.nitroActive
+        ? 0.7 + Math.sin(Date.now() * 0.02) * 0.3
+        : 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
+      const ringScale = bike.nitroBurstTimer > 0
+        ? 1 + (0.4 - bike.nitroBurstTimer) / 0.4 * 0.3
+        : 1;
+
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = bike.nitroActive ? 3 : 2;
+      ctx.globalAlpha = ringPulse;
+      ctx.shadowBlur = bike.nitroActive ? 20 : 0;
+      ctx.shadowColor = ringColor;
       ctx.beginPath();
-      ctx.arc(0, 0, wheelBase * 0.8, 0, Math.PI * 2);
+      ctx.arc(0, 0, wheelBase * 0.8 * ringScale, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     }
 
@@ -709,6 +783,25 @@ class Renderer {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
+        } else if (p.type === 'nitro') {
+          const color = p.color || '#00f5ff';
+          const alpha = Math.min(1, p.life * 1.2);
+          ctx.shadowBlur = 25 * p.life;
+          ctx.shadowColor = color;
+          ctx.fillStyle = color;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+        } else if (p.type === 'nitroSmoke') {
+          ctx.globalAlpha = Math.min(0.4, p.life * 0.5);
+          ctx.fillStyle = p.color || 'rgba(150, 200, 255, 0.4)';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
         } else {
           ctx.fillStyle = `rgba(100, 100, 100, ${p.life * 0.5})`;
           ctx.beginPath();
@@ -721,29 +814,116 @@ class Renderer {
 
   drawSpeedLines(player) {
     const ctx = this.ctx;
-    const speedRatio = Math.abs(player.speed) / player.maxSpeed;
+    const displayMaxSpeed = player.nitroActive ? player.baseMaxSpeed * player.nitroSpeedBoost : player.baseMaxSpeed;
+    const speedRatio = Math.abs(player.speed) / displayMaxSpeed;
+    const nitroBoost = player.nitroActive ? 1 : 0;
 
-    if (speedRatio < 0.5) return;
+    if (speedRatio < 0.4 && nitroBoost === 0) return;
 
-    const count = Math.floor(speedRatio * 15);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${(speedRatio - 0.5) * 0.6})`;
-    ctx.lineWidth = 2;
+    const baseCount = nitroBoost > 0 ? 20 : 12;
+    const count = Math.floor(Math.max(nitroBoost > 0 ? 5 : 0, speedRatio * baseCount) + nitroBoost * 25);
+    const baseAlpha = nitroBoost > 0 ? 0.7 : (speedRatio - 0.4) * 0.9;
+    const baseLength = nitroBoost > 0 ? 120 : 60;
+    const baseDist = nitroBoost > 0 ? 120 : 80;
+
+    ctx.lineCap = 'round';
 
     for (let i = 0; i < count; i++) {
-      const angle = player.angle + Utils.randomRange(-0.8, 0.8);
-      const dist = Utils.randomRange(100, 300);
-      const length = Utils.randomRange(30, 80);
+      const angleSpread = nitroBoost > 0 ? 1.2 : 0.8;
+      const angle = player.angle + Utils.randomRange(-angleSpread, angleSpread);
+      const dist = Utils.randomRange(baseDist, baseDist + (nitroBoost > 0 ? 350 : 220));
+      const length = Utils.randomRange(baseLength, baseLength + (nitroBoost > 0 ? 100 : 50));
 
       const x1 = player.x + Math.cos(angle) * dist;
       const y1 = player.y + Math.sin(angle) * dist;
       const x2 = player.x + Math.cos(angle) * (dist + length);
       const y2 = player.y + Math.sin(angle) * (dist + length);
 
+      if (nitroBoost > 0) {
+        const nitroColors = ['#00f5ff', '#00ffff', '#ffffff', '#66ffff'];
+        const lineColor = nitroColors[Math.floor(Math.random() * nitroColors.length)];
+        ctx.strokeStyle = lineColor;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = lineColor;
+        ctx.globalAlpha = baseAlpha * Utils.randomRange(0.6, 1.0);
+        ctx.lineWidth = Utils.randomRange(2, 5);
+      } else {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${baseAlpha * Utils.randomRange(0.7, 1.0)})`;
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2;
+      }
+
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
     }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  drawNitroBurst(player) {
+    if (!player.nitroActive && player.nitroBurstTimer <= 0) return;
+
+    const ctx = this.ctx;
+    const burstProgress = player.nitroBurstTimer > 0
+      ? (0.4 - player.nitroBurstTimer) / 0.4
+      : 0;
+
+    if (player.nitroBurstTimer > 0) {
+      const shockwaveRadius = 30 + burstProgress * 120;
+      const shockwaveAlpha = (1 - burstProgress) * 0.8;
+
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = '#00f5ff';
+      ctx.strokeStyle = `rgba(0, 245, 255, ${shockwaveAlpha})`;
+      ctx.lineWidth = 6 * (1 - burstProgress * 0.5);
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, shockwaveRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.shadowColor = '#ffffff';
+      ctx.strokeStyle = `rgba(255, 255, 255, ${shockwaveAlpha * 0.6})`;
+      ctx.lineWidth = 3 * (1 - burstProgress * 0.5);
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, shockwaveRadius * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  drawNitroScreenOverlay(player) {
+    if (!player.nitroActive && player.nitroBurstTimer <= 0) return;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const nitroIntensity = player.nitroActive ? 1 : Math.max(0, player.nitroBurstTimer / 0.4);
+
+    if (player.nitroBurstTimer > 0) {
+      const burstAlpha = (player.nitroBurstTimer / 0.4) * 0.35;
+      ctx.fillStyle = `rgba(0, 245, 255, ${burstAlpha})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    if (player.nitroActive) {
+      const pulse = Math.sin(Date.now() * 0.012) * 0.02 + 0.06;
+      const edgeAlpha = nitroIntensity * pulse;
+
+      const gradient = ctx.createRadialGradient(
+        this.width / 2, this.height / 2, Math.min(this.width, this.height) * 0.2,
+        this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.75
+      );
+      gradient.addColorStop(0, 'rgba(0, 245, 255, 0)');
+      gradient.addColorStop(0.7, `rgba(0, 245, 255, ${edgeAlpha * 0.5})`);
+      gradient.addColorStop(1, `rgba(0, 245, 255, ${edgeAlpha * 1.5})`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    ctx.restore();
   }
 
   drawHUD(game) {
@@ -758,6 +938,7 @@ class Renderer {
 
     if (this.isPortrait()) {
       this._drawSpeedometer(game.player, padding, this.height - 100 * uiScale, uiScale);
+      this.drawNitroHUD(game.player, padding, this.height - 150 * uiScale, uiScale);
       this._drawLapInfoPortrait(game.player, game.totalLaps, padding, padding, uiScale);
       this._drawTimerPortrait(game.raceTime, this.width / 2 - 90 * uiScale, padding, uiScale);
       this._drawBestLapPortrait(game.player, game.raceTime, this.width / 2 - 90 * uiScale, padding + 50 * uiScale, uiScale);
@@ -766,6 +947,7 @@ class Renderer {
       this.drawCurrentRouteIndicatorPortrait(game.player, uiScale);
     } else {
       this._drawSpeedometer(game.player, padding, this.height - 120, 1);
+      this.drawNitroHUD(game.player, padding, this.height - 170, 1);
       this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
       this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
       this._drawBestLap(game.player, game.raceTime, this.width / 2 - 100, padding + 60);
@@ -780,13 +962,15 @@ class Renderer {
 
     ctx.restore();
 
+    this.drawNitroScreenOverlay(game.player);
     this.drawRouteHints(game.track, game.player);
   }
 
   _drawSpeedometer(player, x, y, scale = 1) {
     const ctx = this.ctx;
     const speed = Math.abs(player.speed);
-    const speedRatio = speed / player.maxSpeed;
+    const displayMaxSpeed = player.nitroActive ? player.baseMaxSpeed * player.nitroSpeedBoost : player.maxSpeed;
+    const speedRatio = speed / displayMaxSpeed;
 
     const w = 200 * scale;
     const h = 100 * scale;
@@ -795,28 +979,47 @@ class Renderer {
     const barW = 160 * scale;
     const barH = 6 * scale;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    const nitroActive = player.nitroActive;
+    const nitroBurst = player.nitroBurstTimer > 0;
+
+    const bgColor = nitroBurst
+      ? 'rgba(0, 245, 255, 0.25)'
+      : nitroActive
+        ? 'rgba(0, 245, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.6)';
+
+    const borderColor = nitroActive ? '#00ffff' : '#00f5ff';
+    const borderGlow = nitroBurst ? 25 * scale : (nitroActive ? 18 * scale : 10 * scale);
+
+    ctx.fillStyle = bgColor;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 10 * scale);
     ctx.fill();
 
-    ctx.strokeStyle = '#00f5ff';
-    ctx.lineWidth = 2 * scale;
-    ctx.shadowBlur = 10 * scale;
-    ctx.shadowColor = '#00f5ff';
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = nitroActive ? 3 * scale : 2 * scale;
+    ctx.shadowBlur = borderGlow;
+    ctx.shadowColor = borderColor;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 10 * scale);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = '#00f5ff';
+    const speedColor = nitroActive
+      ? (Math.floor(Date.now() / 80) % 2 === 0 ? '#ffffff' : '#00ffff')
+      : '#00f5ff';
+
+    ctx.shadowBlur = nitroActive ? 15 * scale : 0;
+    ctx.shadowColor = nitroActive ? '#00ffff' : 'transparent';
+    ctx.fillStyle = speedColor;
     ctx.font = `bold ${fontSize}px monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(`${Math.floor(speed * 3.6)}`, x + w / 2, y + h * 0.5);
+    ctx.shadowBlur = 0;
 
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = nitroActive ? '#00ffff' : '#888';
     ctx.font = `${labelSize}px monospace`;
-    ctx.fillText('KM/H', x + w / 2, y + h * 0.72);
+    ctx.fillText(nitroActive ? 'BOOST KM/H' : 'KM/H', x + w / 2, y + h * 0.72);
 
     const barX = x + (w - barW) / 2;
     const barY = y + h * 0.82;
@@ -825,12 +1028,140 @@ class Renderer {
     ctx.fillRect(barX, barY, barW, barH);
 
     const gradient = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-    gradient.addColorStop(0, '#00ff00');
-    gradient.addColorStop(0.6, '#ffff00');
-    gradient.addColorStop(1, '#ff0000');
+    if (nitroActive) {
+      gradient.addColorStop(0, '#00ffff');
+      gradient.addColorStop(0.5, '#ffffff');
+      gradient.addColorStop(1, '#00f5ff');
+    } else {
+      gradient.addColorStop(0, '#00ff00');
+      gradient.addColorStop(0.6, '#ffff00');
+      gradient.addColorStop(1, '#ff0000');
+    }
 
     ctx.fillStyle = gradient;
-    ctx.fillRect(barX, barY, barW * speedRatio, barH);
+    ctx.fillRect(barX, barY, barW * Math.min(speedRatio, 1), barH);
+  }
+
+  drawNitroHUD(player, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const energyRatio = player.nitroEnergy / player.nitroMaxEnergy;
+    const isFull = player.nitroEnergy >= player.nitroMaxEnergy;
+    const isActive = player.nitroActive;
+    const readyPulse = Math.sin(player.nitroReadyPulse) * 0.5 + 0.5;
+
+    const w = 200 * scale;
+    const h = 42 * scale;
+    const barH = 14 * scale;
+    const labelSize = 10 * scale;
+    const valueSize = 11 * scale;
+
+    const bgAlpha = isFull ? 0.8 : 0.6;
+    ctx.fillStyle = `rgba(0, 0, 0, ${bgAlpha})`;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.fill();
+
+    const borderColor = isActive
+      ? '#ffffff'
+      : isFull
+        ? (readyPulse > 0.5 ? '#00ffff' : '#00f5ff')
+        : '#00f5ff';
+    const borderWidth = isFull ? 2.5 * scale : 1.5 * scale;
+    const glowSize = isFull ? (12 + readyPulse * 15) * scale : 6 * scale;
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    ctx.shadowBlur = glowSize;
+    ctx.shadowColor = borderColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = isActive ? '#00ffff' : '#888';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('N₂O 氮气', x + 10 * scale, y + 14 * scale);
+
+    const statusText = isActive
+      ? 'BOOST!'
+      : isFull
+        ? '已就绪 [SHIFT]'
+        : player.nitroCooldown > 0
+          ? `冷却 ${player.nitroCooldown.toFixed(1)}s`
+          : '充能中...';
+    const statusColor = isActive
+      ? '#ffffff'
+      : isFull
+        ? '#00ffff'
+        : player.nitroEnergy >= 25
+          ? '#00f5ff'
+          : '#666';
+    ctx.fillStyle = statusColor;
+    ctx.font = `bold ${valueSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.shadowBlur = isActive ? 10 * scale : (isFull ? readyPulse * 10 * scale : 0);
+    ctx.shadowColor = isActive || isFull ? '#00ffff' : 'transparent';
+    ctx.fillText(statusText, x + w - 10 * scale, y + 14 * scale);
+    ctx.shadowBlur = 0;
+
+    const barX = x + 10 * scale;
+    const barY = y + 20 * scale;
+    const barW = w - 20 * scale;
+
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 4 * scale);
+    ctx.fill();
+
+    const fillGradient = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    if (isActive) {
+      const flicker = 0.85 + Math.random() * 0.15;
+      fillGradient.addColorStop(0, `rgba(0, 255, 255, ${flicker})`);
+      fillGradient.addColorStop(0.3, `rgba(255, 255, 255, ${flicker})`);
+      fillGradient.addColorStop(0.6, `rgba(0, 245, 255, ${flicker})`);
+      fillGradient.addColorStop(1, `rgba(100, 200, 255, ${flicker * 0.8})`);
+    } else if (isFull) {
+      const pulseAlpha = 0.8 + readyPulse * 0.2;
+      fillGradient.addColorStop(0, `rgba(0, 245, 255, ${pulseAlpha})`);
+      fillGradient.addColorStop(0.5, `rgba(0, 255, 255, ${pulseAlpha})`);
+      fillGradient.addColorStop(1, `rgba(100, 200, 255, ${pulseAlpha})`);
+    } else {
+      fillGradient.addColorStop(0, 'rgba(0, 150, 200, 0.9)');
+      fillGradient.addColorStop(0.5, 'rgba(0, 200, 220, 0.9)');
+      fillGradient.addColorStop(1, 'rgba(0, 245, 255, 0.9)');
+    }
+
+    const segmentCount = 10;
+    const fillW = barW * energyRatio;
+    ctx.fillStyle = fillGradient;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, fillW, barH, 4 * scale);
+    ctx.fill();
+
+    if (isFull) {
+      for (let i = 0; i < segmentCount; i++) {
+        const segX = barX + (barW / segmentCount) * i + 1;
+        const segW = barW / segmentCount - 2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${readyPulse * 0.3})`;
+        ctx.fillRect(segX, barY + 1, segW, barH - 2);
+      }
+    }
+
+    ctx.strokeStyle = isActive ? 'rgba(255,255,255,0.6)' : 'rgba(0, 245, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 4 * scale);
+    ctx.stroke();
+
+    const pct = Math.floor(energyRatio * 100);
+    ctx.fillStyle = isActive ? '#ffffff' : (isFull ? '#00ffff' : '#aaa');
+    ctx.font = `bold ${valueSize - 1}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = isActive || isFull ? 5 * scale : 0;
+    ctx.shadowColor = '#00ffff';
+    ctx.fillText(`${pct}%`, barX + barW / 2, barY + 11 * scale);
+    ctx.shadowBlur = 0;
   }
 
   _drawLapInfoPortrait(player, totalLaps, x, y, scale = 1) {

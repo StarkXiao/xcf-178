@@ -312,7 +312,9 @@ class TouchControlManager {
       menuSelect: 8,
       drift: [5, 20, 5],
       offTrack: [15, 25, 15],
-      boost: [10, 20, 10, 20, 10]
+      boost: [10, 20, 10, 20, 10],
+      nitroBurst: [30, 20, 40, 20, 50, 30, 30],
+      nitroActive: 6
     };
 
     const base = basePatterns[type] || basePatterns.press;

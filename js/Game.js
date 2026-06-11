@@ -107,7 +107,9 @@ class Game {
       true
     );
     this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
     this.player.acceleration = cfg.playerAcceleration;
+    this.player.baseAcceleration = cfg.playerAcceleration;
     this.player.offTrackFriction = cfg.offTrackFriction;
     this.collision.damageMultiplier = cfg.collisionDamage;
 
@@ -155,7 +157,8 @@ class Game {
       left: document.getElementById('btn-left'),
       right: document.getElementById('btn-right'),
       accel: document.getElementById('btn-accel'),
-      brake: document.getElementById('btn-brake')
+      brake: document.getElementById('btn-brake'),
+      nitro: document.getElementById('btn-nitro')
     };
 
     Object.keys(controls).forEach(key => {
@@ -466,7 +469,9 @@ class Game {
   _applySettings() {
     const cfg = DifficultySettings[this.difficulty];
     this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
     this.player.acceleration = cfg.playerAcceleration;
+    this.player.baseAcceleration = cfg.playerAcceleration;
     this.player.offTrackFriction = cfg.offTrackFriction;
     this.collision.damageMultiplier = cfg.collisionDamage;
     this.totalLaps = LapOptions[this.lapIndex];
@@ -483,7 +488,9 @@ class Game {
       startPositions[cfg.playerGridIndex].angle
     );
     this.player.maxSpeed = cfg.playerMaxSpeed;
+    this.player.baseMaxSpeed = cfg.playerMaxSpeed;
     this.player.acceleration = cfg.playerAcceleration;
+    this.player.baseAcceleration = cfg.playerAcceleration;
     this.player.offTrackFriction = cfg.offTrackFriction;
     this.collision.damageMultiplier = cfg.collisionDamage;
 
@@ -502,6 +509,7 @@ class Game {
     this._prevWasDrifting = false;
     this._prevObstacleCollisions = 0;
     this._prevObstaclesDestroyed = 0;
+    this._nitroVibTimer = 0;
     this.track.resetObstacles();
     this.collision.resetObstacleStats();
     this.renderer.camera.x = this.player.x;
@@ -552,11 +560,26 @@ class Game {
       }
     }
 
+    if (!this.player.prevNitroActive && this.player.nitroActive) {
+      this.touchManager.vibrate('nitroBurst');
+    }
+    if (this.player.nitroActive) {
+      if (!this._nitroVibTimer || this._nitroVibTimer <= 0) {
+        this.touchManager.vibrate('nitroActive');
+        this._nitroVibTimer = 0.15;
+      } else {
+        this._nitroVibTimer -= dt;
+      }
+    } else {
+      this._nitroVibTimer = 0;
+    }
+
     const playerInput = {
       accel: this.input.isAccel(),
       brake: this.input.isBrake(),
       left: this.input.isLeft(),
-      right: this.input.isRight()
+      right: this.input.isRight(),
+      nitro: this.input.isNitro()
     };
 
     this.player.update(dt, playerInput, this.track);
@@ -664,6 +687,7 @@ class Game {
       this.renderer.drawBike(r.bike);
     });
 
+    this.renderer.drawNitroBurst(this.player);
     this.renderer.drawSpeedLines(this.player);
 
     this.renderer.endTransform();

@@ -149,6 +149,36 @@ html, body {
   box-shadow: 0 0 25px rgba(255, 0, 102, 0.8), inset 0 0 15px rgba(255, 0, 102, 0.4);
 }
 
+.btn-nitro {
+  border-color: #00f5ff;
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.5), inset 0 0 10px rgba(0, 245, 255, 0.2);
+  height: 75px;
+  width: 75px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(0, 245, 255, 0.15), rgba(0, 0, 0, 0.7));
+}
+
+.btn-nitro .btn-icon {
+  font-size: 22px;
+}
+
+.btn-nitro:active,
+.btn-nitro.touch-active {
+  background: linear-gradient(145deg, rgba(0, 245, 255, 0.45), rgba(0, 245, 255, 0.25));
+  box-shadow: 0 0 35px rgba(0, 245, 255, 1), inset 0 0 20px rgba(0, 245, 255, 0.6), 0 0 60px rgba(0, 255, 255, 0.4);
+  border-color: #ffffff;
+  animation: nitro-pulse-active 0.15s ease-in-out infinite alternate;
+}
+
+@keyframes nitro-pulse-active {
+  from {
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.9), inset 0 0 18px rgba(0, 245, 255, 0.5), 0 0 50px rgba(0, 255, 255, 0.3);
+  }
+  to {
+    box-shadow: 0 0 45px rgba(0, 245, 255, 1), inset 0 0 25px rgba(0, 245, 255, 0.7), 0 0 80px rgba(0, 255, 255, 0.6);
+  }
+}
+
 .btn-icon {
   font-size: 18px;
   line-height: 1;
@@ -508,8 +538,17 @@ html, body {
     height: 60px;
   }
 
+  .btn-nitro {
+    width: 62px;
+    height: 62px;
+  }
+
   .btn-icon {
     font-size: 16px;
+  }
+
+  .btn-nitro .btn-icon {
+    font-size: 18px;
   }
 
   .touch-settings-panel {
@@ -551,6 +590,11 @@ html, body {
     width: 65px;
     height: 65px;
     border-radius: 32px;
+  }
+
+  .btn-nitro {
+    width: 62px;
+    height: 62px;
   }
 }
 

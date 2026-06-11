@@ -6,7 +6,8 @@ class Input {
       left: false,
       right: false,
       accel: false,
-      brake: false
+      brake: false,
+      nitro: false
     };
     this._pendingTouches = {};
     this._touchTimers = {};
@@ -20,7 +21,7 @@ class Input {
         this.keysJustPressed[e.code] = true;
       }
       this.keys[e.code] = true;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         e.preventDefault();
       }
     });
@@ -44,6 +45,10 @@ class Input {
 
   isBrake() {
     return this.keys['ArrowDown'] || this.keys['KeyS'] || this.touchControls.brake;
+  }
+
+  isNitro() {
+    return this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.keys['KeyX'] || this.touchControls.nitro;
   }
 
   isStart() {
@@ -112,7 +117,8 @@ class Input {
       left: false,
       right: false,
       accel: false,
-      brake: false
+      brake: false,
+      nitro: false
     };
     Object.keys(this._touchTimers).forEach(k => clearTimeout(this._touchTimers[k]));
     this._touchTimers = {};
