@@ -2,6 +2,7 @@ class Collision {
   constructor(track) {
     this.track = track;
     this.damageMultiplier = 0.7;
+    this._bikeCollisionCount = 0;
   }
 
   checkTrackCollision(bike) {
@@ -58,6 +59,7 @@ class Collision {
         }
       }
     }
+    this._bikeCollisionCount += collisions;
     return collisions;
   }
 

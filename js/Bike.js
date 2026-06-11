@@ -12,6 +12,7 @@ class Bike {
     this.steerSpeed = 2.8;
     this.driftAngle = 0;
     this.driftFactor = 0;
+    this.isOnTrack = true;
     this.color = color;
     this.isPlayer = isPlayer;
 
@@ -54,9 +55,9 @@ class Bike {
     }
 
     const trackOffset = track.getTrackOffset(this.x, this.y, this.currentRouteId);
-    const isOnTrack = Math.abs(trackOffset.offset) <= track.width / 2;
+    this.isOnTrack = Math.abs(trackOffset.offset) <= track.width / 2;
 
-    const friction = isOnTrack ? this.friction : this.offTrackFriction;
+    const friction = this.isOnTrack ? this.friction : this.offTrackFriction;
     this.speed *= 1 - friction * dt;
 
     const speedRatio = Math.abs(this.speed) / this.maxSpeed;
@@ -67,13 +68,13 @@ class Bike {
     const steerAmount = this.steerSpeed * steerInput * speedRatio * dt;
     this.angle += steerAmount;
 
-    this._updateDrift(steerInput, speedRatio, dt, isOnTrack);
+    this._updateDrift(steerInput, speedRatio, dt, this.isOnTrack);
 
     const moveAngle = this.angle + this.driftAngle;
     this.x += Math.cos(moveAngle) * this.speed * dt;
     this.y += Math.sin(moveAngle) * this.speed * dt;
 
-    this._addSkidMarks(isOnTrack, speedRatio, steerInput);
+    this._addSkidMarks(this.isOnTrack, speedRatio, steerInput);
     this._updateParticles(dt);
   }
 

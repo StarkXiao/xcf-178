@@ -7,12 +7,24 @@ window.addEventListener('load', () => {
     if (window.game) {
       window.game.resize(window.innerWidth, window.innerHeight);
     }
+    if (window.game && window.game.touchManager) {
+      window.game.touchManager._updateOrientationHint();
+    }
   }
 
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      resizeCanvas();
+    }, 200);
+  });
 
   const game = new Game(canvas);
   window.game = game;
   game.start();
+
+  if (game.touchManager) {
+    game.touchManager._updateOrientationHint();
+  }
 });

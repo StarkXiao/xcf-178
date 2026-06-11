@@ -8,6 +8,9 @@ class Input {
       accel: false,
       brake: false
     };
+    this._pendingTouches = {};
+    this._touchTimers = {};
+    this._debounceDelay = 40;
     this._initKeyboard();
   }
 
@@ -77,7 +80,28 @@ class Input {
 
   setTouchControl(control, value) {
     if (control in this.touchControls) {
-      this.touchControls[control] = value;
+      if (value) {
+        if (this.touchControls[control]) return;
+
+        if (control === 'left' && this.touchControls.right) return;
+        if (control === 'right' && this.touchControls.left) return;
+
+        this._pendingTouches[control] = true;
+        if (this._touchTimers[control]) clearTimeout(this._touchTimers[control]);
+        this._touchTimers[control] = setTimeout(() => {
+          if (this._pendingTouches[control]) {
+            this.touchControls[control] = true;
+            delete this._pendingTouches[control];
+          }
+        }, this._debounceDelay);
+      } else {
+        if (this._touchTimers[control]) {
+          clearTimeout(this._touchTimers[control]);
+          delete this._touchTimers[control];
+        }
+        delete this._pendingTouches[control];
+        this.touchControls[control] = false;
+      }
     }
   }
 
@@ -90,6 +114,9 @@ class Input {
       accel: false,
       brake: false
     };
+    Object.keys(this._touchTimers).forEach(k => clearTimeout(this._touchTimers[k]));
+    this._touchTimers = {};
+    this._pendingTouches = {};
   }
 
   clearJustPressed() {

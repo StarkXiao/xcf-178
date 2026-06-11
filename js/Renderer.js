@@ -5,6 +5,22 @@ class Renderer {
     this.camera = { x: 0, y: 0, scale: 1, targetScale: 1 };
     this.width = canvas.width;
     this.height = canvas.height;
+    this.orientation = 'landscape';
+    this._updateOrientation();
+  }
+
+  _updateOrientation() {
+    this.orientation = this.width > this.height ? 'landscape' : 'portrait';
+  }
+
+  isPortrait() {
+    return this.orientation === 'portrait';
+  }
+
+  _getUIScale() {
+    if (!this.isPortrait()) return 1;
+    const baseScale = Math.min(this.width / 400, this.height / 700);
+    return Math.max(0.7, Math.min(1.1, baseScale));
   }
 
   resize(width, height) {
@@ -12,6 +28,7 @@ class Renderer {
     this.canvas.height = height;
     this.width = width;
     this.height = height;
+    this._updateOrientation();
   }
 
   clear() {
@@ -27,7 +44,8 @@ class Renderer {
     this.camera.y = Utils.lerp(this.camera.y, targetY, dt * 5);
 
     const speedRatio = Math.abs(player.speed) / player.maxSpeed;
-    this.camera.targetScale = 1 - speedRatio * 0.1;
+    const baseScale = this.isPortrait() ? 0.85 : 1;
+    this.camera.targetScale = baseScale - speedRatio * 0.1;
     this.camera.scale = Utils.lerp(this.camera.scale, this.camera.targetScale, dt * 3);
   }
 
@@ -275,96 +293,109 @@ class Renderer {
     if (!player.activeBranchHint) return;
 
     const bp = player.activeBranchHint;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     const centerX = this.width / 2;
-    const centerY = this.height - 180;
+    const centerY = isPortrait ? this.height * 0.55 : this.height - 180;
 
-    const panelWidth = 320;
-    const panelHeight = 80 + bp.routes.length * 45;
+    const panelWidth = isPortrait ? Math.min(280 * uiScale, this.width * 0.9) : 320;
+    const panelHeight = isPortrait ? (70 + bp.routes.length * 40) * uiScale : 80 + bp.routes.length * 45;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.beginPath();
-    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12);
+    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12 * uiScale);
     ctx.fill();
 
     ctx.strokeStyle = '#ffff00';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 15;
+    ctx.lineWidth = 2 * uiScale;
+    ctx.shadowBlur = 15 * uiScale;
     ctx.shadowColor = '#ffff00';
     ctx.beginPath();
-    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12);
+    ctx.roundRect(centerX - panelWidth / 2, centerY - panelHeight / 2, panelWidth, panelHeight, 12 * uiScale);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    const titleSize = isPortrait ? 15 * uiScale : 18;
     ctx.fillStyle = '#ffff00';
-    ctx.font = 'bold 18px monospace';
+    ctx.font = `bold ${titleSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('⚠ 前方分支路口', centerX, centerY - panelHeight / 2 + 35);
+    ctx.fillText('⚠ 前方分支路口', centerX, centerY - panelHeight / 2 + 30 * uiScale);
+
+    const routeItemH = isPortrait ? 35 * uiScale : 38;
+    const routeItemPad = isPortrait ? 12 * uiScale : 15;
+    const dotSize = isPortrait ? 8 * uiScale : 10;
+    const nameSize = isPortrait ? 11 * uiScale : 12;
+    const hintSize = isPortrait ? 9 * uiScale : 10;
 
     bp.routes.forEach((route, idx) => {
-      const itemY = centerY - panelHeight / 2 + 70 + idx * 45;
+      const itemY = centerY - panelHeight / 2 + (isPortrait ? 55 : 70) + idx * (isPortrait ? 40 : 45) * uiScale;
       const isCurrentRoute = route.routeId === player.currentRouteId;
-      const isRecommended = player.selectedRouteAtBranch && 
+      const isRecommended = player.selectedRouteAtBranch &&
                           player.selectedRouteAtBranch.routeId === route.routeId;
 
       ctx.fillStyle = isCurrentRoute ? 'rgba(0, 245, 255, 0.2)' : 'rgba(40, 40, 60, 0.5)';
       ctx.beginPath();
-      ctx.roundRect(centerX - panelWidth / 2 + 15, itemY - 18, panelWidth - 30, 38, 8);
+      ctx.roundRect(centerX - panelWidth / 2 + routeItemPad, itemY - 16 * uiScale, panelWidth - 2 * routeItemPad, routeItemH, 8 * uiScale);
       ctx.fill();
 
       if (isRecommended) {
         ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * uiScale;
         ctx.beginPath();
-        ctx.roundRect(centerX - panelWidth / 2 + 15, itemY - 18, panelWidth - 30, 38, 8);
+        ctx.roundRect(centerX - panelWidth / 2 + routeItemPad, itemY - 16 * uiScale, panelWidth - 2 * routeItemPad, routeItemH, 8 * uiScale);
         ctx.stroke();
       }
 
+      const dotX = centerX - panelWidth / 2 + 30 * uiScale;
       ctx.fillStyle = route.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 8 * uiScale;
       ctx.shadowColor = route.color;
       ctx.beginPath();
-      ctx.arc(centerX - panelWidth / 2 + 35, itemY, 10, 0, Math.PI * 2);
+      ctx.arc(dotX, itemY, dotSize, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
 
+      const nameX = dotX + dotSize + 8 * uiScale;
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = `bold ${nameSize}px monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText(route.name, centerX - panelWidth / 2 + 55, itemY + 4);
+      ctx.fillText(route.name, nameX, itemY + 4);
 
+      const hintX = nameX + 65 * uiScale;
       ctx.fillStyle = '#888';
-      ctx.font = '10px monospace';
-      ctx.fillText(route.hint, centerX - panelWidth / 2 + 120, itemY + 4);
+      ctx.font = `${hintSize}px monospace`;
+      ctx.fillText(route.hint, hintX, itemY + 4);
 
       if (route.lengthBonus && route.lengthBonus < 1.0) {
         ctx.fillStyle = '#00ff00';
         ctx.textAlign = 'right';
-        ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, centerX + panelWidth / 2 - 25, itemY + 4);
+        ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, centerX + panelWidth / 2 - 20 * uiScale, itemY + 4);
       }
 
       if (isRecommended) {
         ctx.fillStyle = '#00ff00';
-        ctx.font = 'bold 10px monospace';
+        ctx.font = `bold ${hintSize}px monospace`;
         ctx.textAlign = 'right';
-        ctx.fillText('推荐', centerX + panelWidth / 2 - 75, itemY + 4);
+        ctx.fillText('推荐', centerX + panelWidth / 2 - 55 * uiScale, itemY + 4);
       }
 
       if (isCurrentRoute) {
         ctx.fillStyle = '#00f5ff';
-        ctx.font = 'bold 10px monospace';
+        ctx.font = `bold ${hintSize}px monospace`;
         ctx.textAlign = 'right';
-        ctx.fillText('当前', centerX + panelWidth / 2 - 110, itemY + 4);
+        ctx.fillText('当前', centerX + panelWidth / 2 - 85 * uiScale, itemY + 4);
       }
     });
 
+    const footerSize = isPortrait ? 9 * uiScale : 11;
     ctx.fillStyle = '#666';
-    ctx.font = '11px monospace';
+    ctx.font = `${footerSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('转向选择路线，保持直行则维持当前路线', centerX, centerY + panelHeight / 2 - 20);
+    ctx.fillText('转向选择路线，保持直行则维持当前路线', centerX, centerY + panelHeight / 2 - 15 * uiScale);
 
     ctx.restore();
   }
@@ -558,20 +589,31 @@ class Renderer {
 
   drawHUD(game) {
     const ctx = this.ctx;
-    const padding = 20;
+    const padding = this.isPortrait() ? 12 : 20;
+    const uiScale = this._getUIScale();
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     this.track = game.track;
 
-    this._drawSpeedometer(game.player, padding, this.height - 120);
-    this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
-    this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
-    this._drawBestLap(game.player, game.raceTime, this.width / 2 - 100, padding + 60);
-    this._drawRankings(game.getRankings(), padding, padding);
-    this._drawDifficultyBadge(game.difficulty, this.width - padding - 180, padding + 95);
-    this.drawCurrentRouteIndicator(game.player);
+    if (this.isPortrait()) {
+      this._drawSpeedometer(game.player, padding, this.height - 100 * uiScale, uiScale);
+      this._drawLapInfoPortrait(game.player, game.totalLaps, padding, padding, uiScale);
+      this._drawTimerPortrait(game.raceTime, this.width / 2 - 90 * uiScale, padding, uiScale);
+      this._drawBestLapPortrait(game.player, game.raceTime, this.width / 2 - 90 * uiScale, padding + 50 * uiScale, uiScale);
+      this._drawRankingsPortrait(game.getRankings(), this.width - padding - 130 * uiScale, padding, uiScale);
+      this._drawDifficultyBadgePortrait(game.difficulty, padding, padding + 95 * uiScale, uiScale);
+      this.drawCurrentRouteIndicatorPortrait(game.player, uiScale);
+    } else {
+      this._drawSpeedometer(game.player, padding, this.height - 120, 1);
+      this._drawLapInfo(game.player, game.totalLaps, this.width - padding - 180, padding);
+      this._drawTimer(game.raceTime, this.width / 2 - 100, padding);
+      this._drawBestLap(game.player, game.raceTime, this.width / 2 - 100, padding + 60);
+      this._drawRankings(game.getRankings(), padding, padding);
+      this._drawDifficultyBadge(game.difficulty, this.width - padding - 180, padding + 95);
+      this.drawCurrentRouteIndicator(game.player);
+    }
 
     if (game.player.isNewLapRecord) {
       this._drawNewRecordOverlay(game.player);
@@ -582,49 +624,333 @@ class Renderer {
     this.drawRouteHints(game.track, game.player);
   }
 
-  _drawSpeedometer(player, x, y) {
+  _drawSpeedometer(player, x, y, scale = 1) {
     const ctx = this.ctx;
     const speed = Math.abs(player.speed);
     const speedRatio = speed / player.maxSpeed;
 
+    const w = 200 * scale;
+    const h = 100 * scale;
+    const fontSize = 36 * scale;
+    const labelSize = 14 * scale;
+    const barW = 160 * scale;
+    const barH = 6 * scale;
+
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
-    ctx.roundRect(x, y, 200, 100, 10);
+    ctx.roundRect(x, y, w, h, 10 * scale);
     ctx.fill();
 
     ctx.strokeStyle = '#00f5ff';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 10;
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 10 * scale;
     ctx.shadowColor = '#00f5ff';
     ctx.beginPath();
-    ctx.roundRect(x, y, 200, 100, 10);
+    ctx.roundRect(x, y, w, h, 10 * scale);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#00f5ff';
-    ctx.font = 'bold 36px monospace';
+    ctx.font = `bold ${fontSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(`${Math.floor(speed * 3.6)}`, x + 100, y + 50);
+    ctx.fillText(`${Math.floor(speed * 3.6)}`, x + w / 2, y + h * 0.5);
 
     ctx.fillStyle = '#888';
-    ctx.font = '14px monospace';
-    ctx.fillText('KM/H', x + 100, y + 72);
+    ctx.font = `${labelSize}px monospace`;
+    ctx.fillText('KM/H', x + w / 2, y + h * 0.72);
 
-    const barWidth = 160;
-    const barHeight = 6;
-    const barX = x + 20;
-    const barY = y + 82;
+    const barX = x + (w - barW) / 2;
+    const barY = y + h * 0.82;
 
     ctx.fillStyle = '#333';
-    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.fillRect(barX, barY, barW, barH);
 
-    const gradient = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
+    const gradient = ctx.createLinearGradient(barX, 0, barX + barW, 0);
     gradient.addColorStop(0, '#00ff00');
     gradient.addColorStop(0.6, '#ffff00');
     gradient.addColorStop(1, '#ff0000');
 
     ctx.fillStyle = gradient;
-    ctx.fillRect(barX, barY, barWidth * speedRatio, barHeight);
+    ctx.fillRect(barX, barY, barW * speedRatio, barH);
+  }
+
+  _drawLapInfoPortrait(player, totalLaps, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const displayLap = Math.min(player.lap + 1, totalLaps);
+    const currentRoute = this.track ? this.track.getRoute(player.currentRouteId) : null;
+    const numCheckpoints = currentRoute ? currentRoute.checkpoints.length : 6;
+    const lapProgress = (player.lap + (player.checkpoint + 1) / numCheckpoints) / totalLaps;
+
+    const w = 130 * scale;
+    const h = 60 * scale;
+    const fontSize = 16 * scale;
+    const subSize = 10 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`LAP ${displayLap}/${totalLaps}`, x + w / 2, y + h * 0.45);
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subSize}px monospace`;
+    ctx.fillText(`CP:${player.checkpoint + 1}/${numCheckpoints}`, x + w / 2, y + h * 0.7);
+
+    const barW = w * 0.8;
+    const barH = 4 * scale;
+    const barX = x + (w - barW) / 2;
+    const barY = y + h * 0.82;
+
+    ctx.fillStyle = '#333';
+    ctx.fillRect(barX, barY, barW, barH);
+
+    const gradient = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    gradient.addColorStop(0, '#ff00ff');
+    gradient.addColorStop(1, '#00f5ff');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(barX, barY, barW * Math.min(lapProgress, 1), barH);
+  }
+
+  _drawTimerPortrait(time, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const w = 180 * scale;
+    const h = 40 * scale;
+    const fontSize = 22 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = '#ffff00';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffff00';
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(Utils.formatTime(time), x + w / 2, y + h * 0.68);
+  }
+
+  _drawBestLapPortrait(player, raceTime, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const currentLapTime = raceTime - player.lastLapTime;
+    const hasBest = player.bestLapTime < Infinity;
+
+    const w = 180 * scale;
+    const h = 55 * scale;
+    const labelSize = 9 * scale;
+    const valueSize = 13 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.fill();
+
+    const bestColor = hasBest ? '#00ff66' : '#444';
+    ctx.strokeStyle = bestColor;
+    ctx.lineWidth = 1.5 * scale;
+    if (hasBest) {
+      ctx.shadowBlur = 6 * scale;
+      ctx.shadowColor = bestColor;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('当前圈', x + 8 * scale, y + h * 0.32);
+
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 3 * scale;
+    ctx.shadowColor = '#ffff00';
+    ctx.font = `bold ${valueSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(Utils.formatTime(currentLapTime), x + w - 8 * scale, y + h * 0.32);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 8 * scale, y + h * 0.48);
+    ctx.lineTo(x + w - 8 * scale, y + h * 0.48);
+    ctx.stroke();
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('最佳圈', x + 8 * scale, y + h * 0.78);
+
+    ctx.fillStyle = hasBest ? '#00ff66' : '#555';
+    ctx.shadowBlur = hasBest ? 3 * scale : 0;
+    ctx.shadowColor = bestColor;
+    ctx.font = `bold ${valueSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      hasBest ? Utils.formatTime(player.bestLapTime) : '--:--:--',
+      x + w - 8 * scale,
+      y + h * 0.78
+    );
+    ctx.shadowBlur = 0;
+  }
+
+  _drawRankingsPortrait(rankings, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const w = 130 * scale;
+    const h = (24 + rankings.length * 22) * scale;
+    const titleSize = 13 * scale;
+    const itemSize = 11 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = '#00f5ff';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('排名', x + 10 * scale, y + 22 * scale);
+
+    const visibleRankings = rankings.slice(0, Math.min(4, rankings.length));
+    visibleRankings.forEach((r, i) => {
+      const bike = r.bike;
+      const rankY = y + (42 + i * 22) * scale;
+
+      ctx.fillStyle = bike.isPlayer ? '#ffff00' : '#888';
+      ctx.font = `${itemSize}px monospace`;
+      ctx.fillText(`${i + 1}.`, x + 10 * scale, rankY);
+
+      ctx.fillStyle = bike.color;
+      ctx.fillRect(x + 30 * scale, rankY - 8 * scale, 8 * scale, 8 * scale);
+
+      ctx.fillStyle = bike.isPlayer ? '#ffffff' : '#aaa';
+      ctx.fillText(bike.isPlayer ? '你' : `AI${i}`, x + 45 * scale, rankY);
+
+      if (bike.finished) {
+        ctx.fillStyle = '#00ff00';
+        ctx.font = `${itemSize - 2}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(Utils.formatTime(bike.raceTime).slice(3), x + w - 8 * scale, rankY);
+        ctx.textAlign = 'left';
+      }
+    });
+  }
+
+  _drawDifficultyBadgePortrait(difficulty, x, y, scale = 1) {
+    const ctx = this.ctx;
+    const cfg = DifficultySettings[difficulty];
+    const w = 130 * scale;
+    const h = 28 * scale;
+    const labelSize = 9 * scale;
+    const valueSize = 13 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = cfg.color;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = cfg.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('难度', x + 8 * scale, y + h * 0.42);
+
+    ctx.fillStyle = cfg.color;
+    ctx.shadowBlur = 5 * scale;
+    ctx.shadowColor = cfg.color;
+    ctx.font = `bold ${valueSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(cfg.label, x + w / 2, y + h * 0.76);
+    ctx.shadowBlur = 0;
+  }
+
+  drawCurrentRouteIndicatorPortrait(player, scale = 1) {
+    const ctx = this.ctx;
+    const route = player.currentRouteId ?
+      (this.track ? this.track.getRoute(player.currentRouteId) : null) : null;
+
+    if (!route) return;
+
+    const w = 140 * scale;
+    const h = 35 * scale;
+    const x = this.width / 2 - w / 2;
+    const y = this.height - 180 * scale;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = route.color;
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = route.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${9 * scale}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('当前路线', x + 8 * scale, y + h * 0.4);
+
+    ctx.fillStyle = route.color;
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowColor = route.color;
+    ctx.font = `bold ${12 * scale}px monospace`;
+    ctx.fillText(route.name, x + 8 * scale, y + h * 0.78);
+    ctx.shadowBlur = 0;
+
+    if (route.isShortcut) {
+      ctx.fillStyle = '#00ff00';
+      ctx.font = `bold ${9 * scale}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${Math.round((1 - route.lengthBonus) * 100)}%`, x + w - 8 * scale, y + h * 0.78);
+    }
+
+    ctx.restore();
   }
 
   _drawLapInfo(player, totalLaps, x, y) {
@@ -903,6 +1229,8 @@ class Renderer {
     const ctx = this.ctx;
     const centerX = this.width / 2;
     const centerY = this.height / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -910,69 +1238,89 @@ class Renderer {
     ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
     ctx.fillRect(0, 0, this.width, this.height);
 
+    const titleY = isPortrait ? centerY * 0.5 : centerY - 130;
+    const titleSize = isPortrait ? 36 * uiScale : 48;
+    const subtitleSize = isPortrait ? 14 * uiScale : 18;
+
     ctx.shadowBlur = 30;
     ctx.shadowColor = '#00f5ff';
     ctx.fillStyle = '#00f5ff';
-    ctx.font = 'bold 48px monospace';
+    ctx.font = `bold ${titleSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('NEON RACER', centerX, centerY - 130);
+    ctx.fillText('NEON RACER', centerX, titleY);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#ff00ff';
-    ctx.font = '18px monospace';
-    ctx.fillText('极速霓虹', centerX, centerY - 92);
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
-    const panelW = 400;
-    const panelH = 260;
+    const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
+    const panelH = isPortrait ? 280 * uiScale : 310;
     const panelX = centerX - panelW / 2;
-    const panelY = centerY - 20;
+    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 20;
 
     ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
     ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
     ctx.fill();
 
     ctx.strokeStyle = '#00f5ff';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2 * uiScale;
+    ctx.shadowBlur = 12 * uiScale;
     ctx.shadowColor = '#00f5ff';
     ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    const itemSpacing = isPortrait ? 55 * uiScale : 60;
+    const btnOffset0 = isPortrait ? 60 * uiScale : 75;
+    const btnOffset1 = btnOffset0 + itemSpacing;
+    const btnOffset2 = btnOffset1 + itemSpacing;
+    const btnOffset3 = btnOffset2 + itemSpacing + 10 * uiScale;
+
     this._drawMenuSelector(
-      panelX, panelY + 75, panelW,
+      panelX, panelY + btnOffset0, panelW,
       '难度', DifficultySettings[game.difficulty].label, DifficultySettings[game.difficulty].color,
-      game.menuCursor === 0
+      game.menuCursor === 0, uiScale
     );
 
     this._drawMenuSelector(
-      panelX, panelY + 135, panelW,
+      panelX, panelY + btnOffset1, panelW,
       '圈数', `${game.totalLaps} 圈`, '#ffff00',
-      game.menuCursor === 1
+      game.menuCursor === 1, uiScale
     );
 
     this._drawMenuButton(
-      panelX, panelY + 210, panelW,
-      '开始比赛',
-      game.menuCursor === 2
+      panelX, panelY + btnOffset2, panelW,
+      '操控设置',
+      game.menuCursor === 2, uiScale
     );
 
+    this._drawMenuButton(
+      panelX, panelY + btnOffset3, panelW,
+      '开始比赛',
+      game.menuCursor === 3, uiScale
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset2 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
+
+    const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
-    ctx.font = '12px monospace';
+    ctx.font = `${hintSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('↑↓ 选择  ←→ 调整  空格/回车 确认', centerX, panelY + panelH + 25);
-    ctx.fillText('点击左右箭头区域可调整选项', centerX, panelY + panelH + 45);
+    ctx.fillText('↑↓ 选择  ←→ 调整  空格/回车 确认', centerX, panelY + panelH + (isPortrait ? 15 * uiScale : 25));
+    ctx.fillText('点击左右箭头区域可调整选项', centerX, panelY + panelH + (isPortrait ? 30 * uiScale : 45));
 
     const bestRecord = game.getBestLapRecordDetail(game.difficulty);
     if (bestRecord !== null) {
-      const recordY = panelY + panelH + 70;
-      const recordH = bestRecord.date ? 50 : 32;
+      const recordY = panelY + panelH + (isPortrait ? 50 * uiScale : 70);
+      const recordH = bestRecord.date ? (isPortrait ? 40 * uiScale : 50) : (isPortrait ? 28 * uiScale : 32);
+      const recordW = isPortrait ? 260 * uiScale : 280;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.beginPath();
-      ctx.roundRect(centerX - 140, recordY - 14, 280, recordH, 8);
+      ctx.roundRect(centerX - recordW / 2, recordY - 14, recordW, recordH, 8 * uiScale);
       ctx.fill();
 
       ctx.strokeStyle = '#00ff66';
@@ -980,34 +1328,37 @@ class Renderer {
       ctx.shadowBlur = 6;
       ctx.shadowColor = '#00ff66';
       ctx.beginPath();
-      ctx.roundRect(centerX - 140, recordY - 14, 280, recordH, 8);
+      ctx.roundRect(centerX - recordW / 2, recordY - 14, recordW, recordH, 8 * uiScale);
       ctx.stroke();
       ctx.shadowBlur = 0;
 
+      const labelSize = isPortrait ? 10 * uiScale : 11;
+      const valueSize = isPortrait ? 12 * uiScale : 14;
+
       ctx.fillStyle = '#888';
-      ctx.font = '11px monospace';
+      ctx.font = `${labelSize}px monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText('🏆 历史最佳单圈', centerX - 128, recordY + 4);
+      ctx.fillText('🏆 历史最佳单圈', centerX - recordW / 2 + 12, recordY + 4);
 
       ctx.fillStyle = '#00ff66';
       ctx.shadowBlur = 4;
       ctx.shadowColor = '#00ff66';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = `bold ${valueSize}px monospace`;
       ctx.textAlign = 'right';
-      ctx.fillText(Utils.formatTime(bestRecord.time), centerX + 128, recordY + 4);
+      ctx.fillText(Utils.formatTime(bestRecord.time), centerX + recordW / 2 - 12, recordY + 4);
       ctx.shadowBlur = 0;
 
       if (bestRecord.date) {
         const date = new Date(bestRecord.date);
         const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
         ctx.fillStyle = '#666';
-        ctx.font = '10px monospace';
+        ctx.font = `${isPortrait ? 9 * uiScale : 10}px monospace`;
         ctx.textAlign = 'left';
-        ctx.fillText(dateStr, centerX - 128, recordY + 24);
+        ctx.fillText(dateStr, centerX - recordW / 2 + 12, recordY + (isPortrait ? 20 * uiScale : 24));
 
         if (bestRecord.totalLaps) {
           ctx.textAlign = 'right';
-          ctx.fillText(`${bestRecord.totalLaps} 圈 · 第${bestRecord.lapIndex}圈创造`, centerX + 128, recordY + 24);
+          ctx.fillText(`${bestRecord.totalLaps}圈·第${bestRecord.lapIndex}圈`, centerX + recordW / 2 - 12, recordY + (isPortrait ? 20 * uiScale : 24));
         }
       }
     }
@@ -1015,51 +1366,75 @@ class Renderer {
     ctx.restore();
   }
 
-  _drawMenuSelector(x, y, w, label, value, valueColor, selected) {
+  _drawTouchSettingsSummary(game, x, y, w, scale = 1) {
     const ctx = this.ctx;
+    if (!game.touchManager) return;
+
+    const settings = game.touchManager.getSettingsSummary();
+    const summaryText = `布局:${settings.layoutLabel} | 震动:${settings.vibrationLabel} | 防误触:${settings.antiMistouchLabel}`;
+
+    ctx.fillStyle = '#555';
+    ctx.font = `${10 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(summaryText, x + w / 2, y);
+  }
+
+  _drawMenuSelector(x, y, w, label, value, valueColor, selected, scale = 1) {
+    const ctx = this.ctx;
+    const padX = 10 * scale;
+    const itemH = 50 * scale;
+    const labelSize = 16 * scale;
+    const valueSize = 22 * scale;
+    const arrowSize = 20 * scale;
+    const labelPadX = 30 * scale;
+    const arrowPadX = 30 * scale;
 
     if (selected) {
       ctx.fillStyle = 'rgba(0, 245, 255, 0.08)';
       ctx.beginPath();
-      ctx.roundRect(x + 10, y - 18, w - 20, 50, 8);
+      ctx.roundRect(x + padX, y - 18 * scale, w - 2 * padX, itemH, 8 * scale);
       ctx.fill();
 
       ctx.strokeStyle = 'rgba(0, 245, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(x + 10, y - 18, w - 20, 50, 8);
+      ctx.roundRect(x + padX, y - 18 * scale, w - 2 * padX, itemH, 8 * scale);
       ctx.stroke();
     }
 
     ctx.fillStyle = '#888';
-    ctx.font = '16px monospace';
+    ctx.font = `${labelSize}px monospace`;
     ctx.textAlign = 'left';
-    ctx.fillText(label, x + 30, y + 8);
+    ctx.fillText(label, x + labelPadX, y + 8 * scale);
 
+    const arrowXLeft = x + w * 0.28;
     ctx.fillStyle = '#666';
-    ctx.font = '22px monospace';
+    ctx.font = `${arrowSize}px monospace`;
     ctx.textAlign = 'left';
-    ctx.fillText('◀', x + 110, y + 10);
+    ctx.fillText('◀', arrowXLeft, y + 10 * scale);
 
-    ctx.shadowBlur = selected ? 12 : 0;
+    ctx.shadowBlur = selected ? 12 * scale : 0;
     ctx.shadowColor = valueColor;
     ctx.fillStyle = valueColor;
-    ctx.font = 'bold 22px monospace';
+    ctx.font = `bold ${valueSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(value, x + w / 2, y + 10);
+    ctx.fillText(value, x + w / 2, y + 10 * scale);
     ctx.shadowBlur = 0;
 
+    const arrowXRight = x + w * 0.72;
     ctx.fillStyle = '#666';
-    ctx.font = '22px monospace';
+    ctx.font = `${arrowSize}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText('▶', x + w - 30, y + 10);
+    ctx.fillText('▶', arrowXRight, y + 10 * scale);
   }
 
-  _drawMenuButton(x, y, w, label, selected) {
+  _drawMenuButton(x, y, w, label, selected, scale = 1) {
     const ctx = this.ctx;
-    const btnX = x + 60;
-    const btnW = w - 120;
-    const btnH = 40;
+    const btnPadding = 60 * scale;
+    const btnX = x + btnPadding;
+    const btnW = w - 2 * btnPadding;
+    const btnH = 40 * scale;
+    const textSize = 18 * scale;
 
     const bgColor = selected ? 'rgba(0, 245, 255, 0.15)' : 'rgba(40, 40, 60, 0.8)';
     const borderColor = selected ? '#00f5ff' : '#444';
@@ -1067,28 +1442,30 @@ class Renderer {
 
     ctx.fillStyle = bgColor;
     ctx.beginPath();
-    ctx.roundRect(btnX, y - 5, btnW, btnH, 8);
+    ctx.roundRect(btnX, y - 5 * scale, btnW, btnH, 8 * scale);
     ctx.fill();
 
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = selected ? 2 : 1;
     if (selected) {
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 12 * scale;
       ctx.shadowColor = borderColor;
     }
     ctx.beginPath();
-    ctx.roundRect(btnX, y - 5, btnW, btnH, 8);
+    ctx.roundRect(btnX, y - 5 * scale, btnW, btnH, 8 * scale);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = textColor;
-    ctx.font = 'bold 18px monospace';
+    ctx.font = `bold ${textSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(label, btnX + btnW / 2, y + 20);
+    ctx.fillText(label, btnX + btnW / 2, y + 20 * scale);
   }
 
   drawCountdown(count) {
     const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1098,11 +1475,12 @@ class Renderer {
 
     const text = count > 0 ? count.toString() : 'GO!';
     const color = count > 0 ? '#ffff00' : '#00ff00';
+    const fontSize = isPortrait ? 80 * uiScale : 120;
 
-    ctx.shadowBlur = 40;
+    ctx.shadowBlur = 40 * uiScale;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
-    ctx.font = 'bold 120px monospace';
+    ctx.font = `bold ${fontSize}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, this.width / 2, this.height / 2);

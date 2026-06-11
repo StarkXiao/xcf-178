@@ -59,6 +59,7 @@ class Game {
     this.canvas = canvas;
     this.renderer = new Renderer(canvas);
     this.input = new Input();
+    this.touchManager = new TouchControlManager();
 
     this.state = GameState.MENU;
     this.countdown = 3;
@@ -69,7 +70,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 3;
+    this.menuItemCount = 4;
 
     this.track = null;
     this.player = null;
@@ -80,6 +81,10 @@ class Game {
 
     this.lastTime = 0;
     this.running = false;
+    this._prevPlayerLap = 0;
+    this._prevCollisionCount = 0;
+    this._prevWasOffTrack = false;
+    this._prevWasDrifting = false;
 
     this._init();
   }
@@ -142,6 +147,8 @@ class Game {
   }
 
   _setupTouchControls() {
+    this.touchManager.applyLayout();
+
     const controls = {
       left: document.getElementById('btn-left'),
       right: document.getElementById('btn-right'),
@@ -155,12 +162,25 @@ class Game {
 
       const handleStart = (e) => {
         e.preventDefault();
+
+        const touch = e.touches ? e.touches[0] : e;
+        if (!this.touchManager.validateTouch(key, touch)) return;
+
+        const touchId = touch.identifier !== undefined ? touch.identifier : 'mouse';
+        this.touchManager.shouldActivate(key, touchId, e);
         this.input.setTouchControl(key, true);
+        this.touchManager.registerActiveTouch(key, true);
+
+        btn.classList.add('touch-active');
+
+        this.touchManager.vibrate(key === 'brake' ? 'brake' : 'press');
       };
 
       const handleEnd = (e) => {
         e.preventDefault();
         this.input.setTouchControl(key, false);
+        this.touchManager.registerActiveTouch(key, false);
+        btn.classList.remove('touch-active');
       };
 
       btn.addEventListener('touchstart', handleStart, { passive: false });
@@ -172,6 +192,9 @@ class Game {
       btn.addEventListener('mouseleave', handleEnd);
     });
 
+    this._createSettingsPanel();
+    this._setupOrientationHint();
+
     this.canvas.addEventListener('click', (e) => {
       if (this.state === GameState.MENU) {
         this._handleMenuClick(e);
@@ -179,6 +202,138 @@ class Game {
         this.startGame();
       }
     });
+  }
+
+  _setupOrientationHint() {
+    const hint = document.getElementById('orientationHint');
+    if (!hint) return;
+
+    const content = hint.querySelector('.orientation-hint-content');
+    if (content) {
+      content.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.touchManager.toggleAutoRotateHint();
+      });
+    }
+  }
+
+  _createSettingsPanel() {
+    const container = document.querySelector('.game-container');
+    const overlay = document.createElement('div');
+    overlay.className = 'touch-settings-overlay';
+    overlay.id = 'touchSettingsOverlay';
+
+    const panel = document.createElement('div');
+    panel.className = 'touch-settings-panel';
+
+    const layouts = this.touchManager.getLayoutNames();
+    const layoutOptions = layouts.map(l =>
+      `<div class="touch-settings-option ${l.active ? 'active' : ''}" data-layout="${l.key}">
+        ${l.label}
+        <span class="option-desc">${l.description}</span>
+      </div>`
+    ).join('');
+
+    const vibLevels = this.touchManager.getVibrationLevels();
+    const vibOptions = vibLevels.map(l =>
+      `<div class="touch-settings-option ${l.active ? 'active' : ''}" data-vibration="${l.key}">${l.label}</div>`
+    ).join('');
+
+    const antiLevels = this.touchManager.getAntiMistouchLevels();
+    const antiOptions = antiLevels.map(l =>
+      `<div class="touch-settings-option ${l.active ? 'active' : ''}" data-antimistouch="${l.key}">${l.label}</div>`
+    ).join('');
+
+    panel.innerHTML = `
+      <h2>操控设置</h2>
+
+      <div class="touch-settings-section-title">按键布局</div>
+      <div class="touch-settings-group">
+        <div class="touch-settings-options" id="layoutOptions">
+          ${layoutOptions}
+        </div>
+      </div>
+
+      <div class="touch-settings-section-title">震动反馈</div>
+      <div class="touch-settings-group">
+        <div class="touch-settings-options" id="vibrationOptions">
+          ${vibOptions}
+        </div>
+      </div>
+
+      <div class="touch-settings-section-title">防误触</div>
+      <div class="touch-settings-group">
+        <div class="touch-settings-options" id="antiMistouchOptions">
+          ${antiOptions}
+        </div>
+      </div>
+
+      <div class="touch-settings-toggle">
+        <div>
+          <div class="toggle-label">横屏提示</div>
+          <div class="toggle-desc">竖屏时显示旋转提示</div>
+        </div>
+        <div class="toggle-switch ${this.touchManager.autoRotateHint ? 'on' : ''}" id="rotateHintToggle"></div>
+      </div>
+
+      <button class="touch-settings-close" id="settingsClose">确定</button>
+    `;
+
+    overlay.appendChild(panel);
+    container.appendChild(overlay);
+
+    panel.querySelectorAll('[data-layout]').forEach(el => {
+      el.addEventListener('click', () => {
+        const layout = el.dataset.layout;
+        this.touchManager.setLayout(layout);
+        this.touchManager.vibrate('menuSelect');
+        panel.querySelectorAll('[data-layout]').forEach(opt => opt.classList.remove('active'));
+        el.classList.add('active');
+      });
+    });
+
+    panel.querySelectorAll('[data-vibration]').forEach(el => {
+      el.addEventListener('click', () => {
+        const level = el.dataset.vibration;
+        this.touchManager.setVibrationLevel(level);
+        panel.querySelectorAll('[data-vibration]').forEach(opt => opt.classList.remove('active'));
+        el.classList.add('active');
+      });
+    });
+
+    panel.querySelectorAll('[data-antimistouch]').forEach(el => {
+      el.addEventListener('click', () => {
+        const level = el.dataset.antimistouch;
+        this.touchManager.setAntiMistouchLevel(level);
+        panel.querySelectorAll('[data-antimistouch]').forEach(opt => opt.classList.remove('active'));
+        el.classList.add('active');
+      });
+    });
+
+    const rotateToggle = panel.querySelector('#rotateHintToggle');
+    rotateToggle.addEventListener('click', () => {
+      this.touchManager.toggleAutoRotateHint();
+      rotateToggle.classList.toggle('on');
+      this.touchManager.vibrate('menuSelect');
+    });
+
+    panel.querySelector('#settingsClose').addEventListener('click', () => {
+      this._closeSettingsPanel();
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this._closeSettingsPanel();
+    });
+  }
+
+  _openSettingsPanel() {
+    const overlay = document.getElementById('touchSettingsOverlay');
+    if (overlay) overlay.classList.add('visible');
+  }
+
+  _closeSettingsPanel() {
+    const overlay = document.getElementById('touchSettingsOverlay');
+    if (overlay) overlay.classList.remove('visible');
   }
 
   _handleMenuClick(e) {
@@ -192,7 +347,8 @@ class Game {
 
     const itemY0 = panelY + 75;
     const itemY1 = panelY + 135;
-    const itemY2 = panelY + 210;
+    const itemY2 = panelY + 195;
+    const itemY3 = panelY + 270;
 
     if (x >= panelX && x <= panelX + 400) {
       if (y >= itemY0 && y < itemY0 + 50) {
@@ -211,6 +367,10 @@ class Game {
         }
       } else if (y >= itemY2 && y < itemY2 + 50) {
         this.menuCursor = 2;
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      } else if (y >= itemY3 && y < itemY3 + 50) {
+        this.menuCursor = 3;
         this.startGame();
       }
     }
@@ -266,9 +426,11 @@ class Game {
   _updateMenu() {
     if (this.input.isMenuUp()) {
       this.menuCursor = (this.menuCursor - 1 + this.menuItemCount) % this.menuItemCount;
+      this.touchManager.vibrate('menuSelect');
     }
     if (this.input.isMenuDown()) {
       this.menuCursor = (this.menuCursor + 1) % this.menuItemCount;
+      this.touchManager.vibrate('menuSelect');
     }
 
     if (this.menuCursor === 0) {
@@ -277,10 +439,15 @@ class Game {
     } else if (this.menuCursor === 1) {
       if (this.input.isMenuLeft()) this._changeLaps(-1);
       if (this.input.isMenuRight()) this._changeLaps(1);
-    }
-
-    if (this.menuCursor === 2 && this.input.isMenuConfirm()) {
-      this.startGame();
+    } else if (this.menuCursor === 2) {
+      if (this.input.isMenuConfirm()) {
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      }
+    } else if (this.menuCursor === 3) {
+      if (this.input.isMenuConfirm()) {
+        this.startGame();
+      }
     }
 
     this.input.clearJustPressed();
@@ -327,9 +494,14 @@ class Game {
 
     this.raceTime = 0;
     this.isHistoricalRecord = false;
+    this._prevPlayerLap = 0;
+    this._prevCollisionCount = 0;
+    this._prevWasOffTrack = false;
+    this._prevWasDrifting = false;
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
     this.input.reset();
+    this.touchManager.reset();
   }
 
   _updateCountdown(dt) {
@@ -338,6 +510,12 @@ class Game {
     if (this.countdownTimer >= 1) {
       this.countdownTimer = 0;
       this.countdown--;
+
+      if (this.countdown > 0) {
+        this.touchManager.vibrate('countdown');
+      } else if (this.countdown === 0) {
+        this.touchManager.vibrate('go');
+      }
 
       if (this.countdown < 0) {
         this.state = GameState.RACING;
@@ -356,6 +534,15 @@ class Game {
       this.player.newRecordTimer -= dt;
       if (this.player.newRecordTimer <= 0) {
         this.player.isNewLapRecord = false;
+      }
+    }
+
+    if (this._prevPlayerLap < this.player.lap) {
+      this._prevPlayerLap = this.player.lap;
+      if (this.player.isNewLapRecord) {
+        this.touchManager.vibrate('newRecord');
+      } else {
+        this.touchManager.vibrate('lapComplete');
       }
     }
 
@@ -392,6 +579,22 @@ class Game {
       }
     });
 
+    const collisionCount = this.collision._bikeCollisionCount || 0;
+    if (collisionCount > this._prevCollisionCount) {
+      this.touchManager.vibrate('collision');
+    }
+    this._prevCollisionCount = collisionCount;
+
+    if (!this.player.isOnTrack && !this._prevWasOffTrack) {
+      this.touchManager.vibrate('offTrack');
+    }
+    this._prevWasOffTrack = !this.player.isOnTrack;
+
+    if (this.player.driftFactor > 0.5 && !this._prevWasDrifting) {
+      this.touchManager.vibrate('drift');
+    }
+    this._prevWasDrifting = this.player.driftFactor > 0.5;
+
     this.collision.checkAllBikeCollisions(this.getAllBikes());
 
     const allFinished = this.getAllBikes().every(b => b.finished);
@@ -406,7 +609,7 @@ class Game {
   _updateFinished() {
     if (this.input.isMenuConfirm()) {
       this.state = GameState.MENU;
-      this.menuCursor = 2;
+      this.menuCursor = 3;
       this.input.clearJustPressed();
     }
   }
@@ -455,6 +658,9 @@ class Game {
 
   resize(width, height) {
     this.renderer.resize(width, height);
+    if (this.touchManager.updateOrientation()) {
+      this.touchManager.applyLayout();
+    }
   }
 
   _loadBestLapRecords() {
