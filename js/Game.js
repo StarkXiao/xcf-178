@@ -680,6 +680,10 @@ class Game {
       return;
     }
 
+    if (this.replaySystem && this.replaySystem.isPlaying()) {
+      return;
+    }
+
     switch (this.state) {
       case GameState.MENU:
         this._updateMenu();
@@ -1992,14 +1996,11 @@ class Game {
       return;
     }
 
-    if (this.replaySystem && (this.replaySystem.getState() === ReplayState.PLAYING ||
-        this.replaySystem.getState() === ReplayState.PAUSED)) {
+    if (this.replaySystem && this.replaySystem.isPlaying()) {
       const mainBike = this.replaySystem.getMainReplayBike();
       if (mainBike) {
         this.renderer.updateCamera(mainBike, 0.016);
       }
-      this.replaySystem.render(this.renderer.ctx, this.renderer);
-      return;
     }
 
     if (this.state === GameState.MENU) {

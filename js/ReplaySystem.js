@@ -238,10 +238,15 @@ class ReplaySystem {
     
     if (this.game && this.game.loadEditorTrack && this.currentRecording.meta.trackConfig) {
       this.game._isEditorMode = true;
-      this.game.laps = this.currentRecording.meta.laps;
+      this.game.totalLaps = this.currentRecording.meta.laps;
       this.game.difficulty = this.currentRecording.meta.difficulty;
       this.game.aiCount = this.currentRecording.meta.aiCount;
       this.game.loadEditorTrack(this.currentRecording.meta.trackConfig);
+    }
+    
+    if (this.game) {
+      this.game.state = 'racing';
+      this.game.raceTime = 0;
     }
     
     this._showHUD();
@@ -277,8 +282,13 @@ class ReplaySystem {
     this._hideHUD();
     document.getElementById('replayControls').style.display = 'none';
     
-    if (this.game && this.game.quitToMenu) {
-      this.game.quitToMenu();
+    if (this.game) {
+      if (this.game._isEditorMode && this.game.raceEditor) {
+        this.game.state = 'raceEditor';
+        this.game.raceEditor.show();
+      } else if (this.game.quitToMenu) {
+        this.game.quitToMenu();
+      }
     }
   }
 

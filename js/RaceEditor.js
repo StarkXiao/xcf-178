@@ -446,9 +446,9 @@ class RaceEditor {
     this._updateNodeCount();
   }
 
-  hide() {
+  hide(returnToMenu = true) {
     this.uiPanel.classList.remove('visible');
-    if (this.game && this.game.quitToMenu) {
+    if (returnToMenu && this.game && this.game.quitToMenu) {
       this.game.quitToMenu();
     }
   }
@@ -611,14 +611,48 @@ class RaceEditor {
     }
     
     this._updateConfigFromNodes();
-    this._buildTempTrack();
     
     if (this.game && this.game.loadEditorTrack) {
-      this.game.laps = this.config.laps;
+      this.game.totalLaps = this.config.laps;
       this.game.difficulty = this.config.aiDifficulty;
       this.game.aiCount = this.config.aiCount;
       this.game.loadEditorTrack(this.config);
-      this.hide();
+      
+      const touchControls = document.getElementById('touchControls');
+      if (touchControls) {
+        touchControls.classList.remove('paused');
+      }
+      
+      if (this.game.replaySystem) {
+        this.game.replaySystem.startRecording();
+      }
+      
+      this.game._prevStateBeforePause = null;
+      this.game.state = 'countdown';
+      this.game.countdown = 3;
+      this.game.countdownTimer = 0;
+      this.game.raceTime = 0;
+      this.game.isHistoricalRecord = false;
+      this.game._prevPlayerLap = 0;
+      this.game._prevCollisionCount = 0;
+      this.game._prevWasOffTrack = false;
+      this.game._prevWasDrifting = false;
+      this.game._prevObstacleCollisions = 0;
+      this.game._prevObstaclesDestroyed = 0;
+      this.game._nitroVibTimer = 0;
+      
+      if (this.game.track) {
+        this.game.track.resetObstacles();
+      }
+      if (this.game.collision && this.game.collision.resetObstacleStats) {
+        this.game.collision.resetObstacleStats();
+      }
+      
+      if (this.game.input) {
+        this.game.input.reset();
+      }
+      
+      this.hide(false);
     }
   }
 
@@ -632,8 +666,8 @@ class RaceEditor {
       
       const latest = recordings[recordings.length - 1];
       this.game.replaySystem.loadRecording(latest.key);
+      this.hide(false);
       this.game.replaySystem.playRecording();
-      this.hide();
     }
   }
 
