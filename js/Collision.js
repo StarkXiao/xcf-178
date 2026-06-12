@@ -47,6 +47,15 @@ class Collision {
       bike1.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
       bike2.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
 
+      if (bike1.isPlayer) {
+        if (!bike1.bikeCollisions) bike1.bikeCollisions = 0;
+        bike1.bikeCollisions++;
+      }
+      if (bike2.isPlayer) {
+        if (!bike2.bikeCollisions) bike2.bikeCollisions = 0;
+        bike2.bikeCollisions++;
+      }
+
       return true;
     }
     return false;

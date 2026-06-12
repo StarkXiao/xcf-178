@@ -1239,7 +1239,9 @@ class Game {
     const rankings = this.getRankings();
     const playerRank = rankings.find(r => r.bike.isPlayer);
     const rank = playerRank ? playerRank.rank : rankings.length + 1;
-    const totalCollisions = (this.player.obstacleCollisions || 0) + (this.collision._bikeCollisionCount || 0);
+    const playerBikeCollisions = this.player.bikeCollisions || 0;
+    const playerObstacleCollisions = this.player.obstacleCollisions || 0;
+    const totalPlayerCollisions = playerBikeCollisions + playerObstacleCollisions;
     const driftDistance = this.player.totalDriftDistance || 0;
     const bestLapTime = this.player.bestLapTime;
     const obstaclesDestroyed = this.player.obstaclesDestroyed || 0;
@@ -1248,7 +1250,7 @@ class Game {
 
     this.achievements.processRaceResults({
       playerRank: rank,
-      playerCollisions: totalCollisions,
+      playerCollisions: totalPlayerCollisions,
       raceDriftDistance: driftDistance,
       bestLapTime: bestLapTime,
       obstaclesDestroyed: obstaclesDestroyed,

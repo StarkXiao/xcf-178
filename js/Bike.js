@@ -43,6 +43,7 @@ class Bike {
 
     this.obstacleCollisions = 0;
     this.obstaclesDestroyed = 0;
+    this.bikeCollisions = 0;
     this.obstacleHitCooldown = 0;
     this._addExplosionParticles = null;
     this._addHitParticles = null;
@@ -391,6 +392,7 @@ class Bike {
     this.particles = [];
     this.obstacleCollisions = 0;
     this.obstaclesDestroyed = 0;
+    this.bikeCollisions = 0;
     this.obstacleHitCooldown = 0;
     this._addExplosionParticles = null;
     this._addHitParticles = null;
