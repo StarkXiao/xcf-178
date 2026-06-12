@@ -2199,9 +2199,9 @@ class Renderer {
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 358 * uiScale : 395;
+    const panelH = isPortrait ? 358 * uiScale : 355;
     const panelX = centerX - panelW / 2;
-    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 30;
+    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 60;
 
     ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
     ctx.beginPath();
@@ -2217,12 +2217,12 @@ class Renderer {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    const itemSpacing = isPortrait ? 48 * uiScale : 52;
-    const btnOffset0 = isPortrait ? 50 * uiScale : 65;
+    const itemSpacing = isPortrait ? 48 * uiScale : 45;
+    const btnOffset0 = isPortrait ? 50 * uiScale : 55;
     const btnOffset1 = btnOffset0 + itemSpacing;
     const btnOffset2 = btnOffset1 + itemSpacing;
     const btnOffset3 = btnOffset2 + itemSpacing;
-    const btnOffset4 = btnOffset3 + itemSpacing + 8 * uiScale;
+    const btnOffset4 = btnOffset3 + itemSpacing + 6 * uiScale;
     const btnOffset5 = btnOffset4 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
@@ -3241,6 +3241,1147 @@ class Renderer {
     }
 
     ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawCareerMap(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+    const stages = career.getStages();
+    const stage = stages[game.careerStageCursor];
+    const isStageUnlocked = career.isStageUnlocked(game.careerStageCursor);
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    this._drawCareerBackground();
+
+    const topBarY = isPortrait ? 18 * uiScale : 20;
+    const btnW = isPortrait ? 80 * uiScale : 90;
+    const btnH = isPortrait ? 36 * uiScale : 40;
+    const titleSize = isPortrait ? 22 * uiScale : 28;
+    const subtitleSize = isPortrait ? 11 * uiScale : 13;
+
+    this._drawCareerTopButton(
+      isPortrait ? 15 * uiScale : 20, topBarY, btnW, btnH,
+      '← 返回', '#666', '#444'
+    );
+    this._drawCareerTopButton(
+      this.width - (isPortrait ? 15 * uiScale : 20) - btnW * 1.1, topBarY, btnW * 1.1, btnH,
+      '🔧 升级', '#ffff00', '#aa8800'
+    );
+
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ffd700';
+    ctx.font = `bold ${subtitleSize + 1}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`💰 ${career.coins}`, this.width - (isPortrait ? 15 * uiScale : 20), topBarY + btnH + 22 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const navY = isPortrait ? 90 * uiScale : 90;
+    const navBtnSize = isPortrait ? 40 * uiScale : 45;
+    const stageTitleW = isPortrait ? 220 * uiScale : 280;
+    const leftBtnX = centerX - stageTitleW / 2 - navBtnSize - 10;
+    const rightBtnX = centerX + stageTitleW / 2 + 10;
+
+    this._drawNavArrow(leftBtnX, navY, navBtnSize, '◀', isStageUnlocked ? '#00f5ff' : '#444');
+    this._drawNavArrow(rightBtnX, navY, navBtnSize, '▶', isStageUnlocked ? '#ff00ff' : '#444');
+
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = stage.color;
+    ctx.fillStyle = stage.color;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(stage.name, centerX, navY + 6);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText(stage.subtitle, centerX, navY + 6 + (isPortrait ? 20 * uiScale : 26));
+
+    const completedEvents = stage.events.filter(e => career.isEventCompleted(e.id)).length;
+    const progressPct = (completedEvents / stage.events.length) * 100;
+    const progressW = isPortrait ? 200 * uiScale : 250;
+    const progressH = isPortrait ? 8 * uiScale : 10;
+    const progressY = navY + (isPortrait ? 42 * uiScale : 50);
+
+    ctx.fillStyle = 'rgba(40, 40, 70, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(centerX - progressW / 2, progressY, progressW, progressH, progressH / 2);
+    ctx.fill();
+
+    const stageGrad = ctx.createLinearGradient(centerX - progressW / 2, 0, centerX + progressW / 2, 0);
+    stageGrad.addColorStop(0, stage.color);
+    stageGrad.addColorStop(1, stage.color + '88');
+    ctx.fillStyle = stageGrad;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = stage.color;
+    ctx.beginPath();
+    ctx.roundRect(centerX - progressW / 2, progressY, progressW * (progressPct / 100), progressH, progressH / 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${subtitleSize - 1}px monospace`;
+    ctx.fillText(`${completedEvents} / ${stage.events.length} 关`, centerX, progressY + progressH + (isPortrait ? 16 * uiScale : 20));
+
+    if (career.isStageCompleted(stage.id)) {
+      const badgeW = isPortrait ? 100 * uiScale : 120;
+      const badgeH = isPortrait ? 24 * uiScale : 28;
+      const badgeY = progressY + progressH + (isPortrait ? 26 * uiScale : 32);
+      ctx.fillStyle = 'rgba(0, 255, 102, 0.15)';
+      ctx.beginPath();
+      ctx.roundRect(centerX - badgeW / 2, badgeY, badgeW, badgeH, badgeH / 2);
+      ctx.fill();
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#00ff66';
+      ctx.beginPath();
+      ctx.roundRect(centerX - badgeW / 2, badgeY, badgeW, badgeH, badgeH / 2);
+      ctx.stroke();
+      ctx.fillStyle = '#00ff66';
+      ctx.font = `bold ${subtitleSize}px monospace`;
+      ctx.fillText(`🏆 +${stage.reward}`, centerX, badgeY + badgeH * 0.72);
+      ctx.shadowBlur = 0;
+    }
+
+    const listTop = isPortrait ? 200 * uiScale : progressY + progressH + 70;
+    const listBottom = isPortrait ? this.height - 110 * uiScale : this.height - 90;
+    const listW = isPortrait ? Math.min(360 * uiScale, this.width * 0.9) : 520;
+    const listX = centerX - listW / 2;
+
+    const eventCount = stage.events.length;
+    const itemGap = isPortrait ? 10 * uiScale : 12;
+    const itemH = isPortrait ? 62 * uiScale : 72;
+    const totalItemH = eventCount * itemH + (eventCount - 1) * itemGap;
+    const startY = listTop + Math.max(0, (listBottom - listTop - totalItemH) / 2);
+
+    stage.events.forEach((event, i) => {
+      const iy = startY + i * (itemH + itemGap);
+      const isUnlocked = isStageUnlocked && career.isEventUnlocked(event.id);
+      const isCompleted = career.isEventCompleted(event.id);
+      const isSelected = game.careerEventCursor === i;
+      const diffCfg = DifficultySettings[event.difficulty];
+
+      if (isSelected && isUnlocked) {
+        ctx.fillStyle = `${diffCfg.color}15`;
+        ctx.beginPath();
+        ctx.roundRect(listX + 6, iy, listW - 12, itemH, 10 * uiScale);
+        ctx.fill();
+        ctx.strokeStyle = diffCfg.color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = diffCfg.color;
+        ctx.beginPath();
+        ctx.roundRect(listX + 6, iy, listW - 12, itemH, 10 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      if (!isUnlocked) {
+        ctx.fillStyle = 'rgba(15, 15, 30, 0.6)';
+        ctx.beginPath();
+        ctx.roundRect(listX + 10, iy + 4, listW - 20, itemH - 8, 8 * uiScale);
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(listX + 10, iy + 4, listW - 20, itemH - 8, 8 * uiScale);
+        ctx.stroke();
+      }
+
+      const nodeSize = isPortrait ? 36 * uiScale : 42;
+      const nodeX = listX + 25 + nodeSize / 2;
+      const nodeY = iy + itemH / 2;
+
+      if (!isUnlocked) {
+        ctx.fillStyle = '#2a2a3a';
+        ctx.beginPath();
+        ctx.arc(nodeX, nodeY, nodeSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#555';
+        ctx.font = `bold ${nodeSize * 0.45}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', nodeX, nodeY);
+        ctx.textBaseline = 'alphabetic';
+      } else if (isCompleted) {
+        const bestResult = career.getEventBestResult(event.id);
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.2)';
+        ctx.beginPath();
+        ctx.arc(nodeX, nodeY, nodeSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ff66';
+        ctx.beginPath();
+        ctx.arc(nodeX, nodeY, nodeSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${nodeSize * 0.42}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`#${bestResult.rank}`, nodeX, nodeY);
+        ctx.textBaseline = 'alphabetic';
+      } else {
+        const pulse = Math.sin(Date.now() * 0.005 + i) * 0.2 + 0.8;
+        ctx.fillStyle = `${diffCfg.color}30`;
+        ctx.beginPath();
+        ctx.arc(nodeX, nodeY, nodeSize / 2 * (isSelected ? 1.05 * pulse : 1), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = diffCfg.color;
+        ctx.lineWidth = 2;
+        if (isSelected) {
+          ctx.shadowBlur = 15 * pulse;
+          ctx.shadowColor = diffCfg.color;
+        }
+        ctx.beginPath();
+        ctx.arc(nodeX, nodeY, nodeSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = isUnlocked ? diffCfg.color : '#666';
+        ctx.font = `bold ${nodeSize * 0.5}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(i + 1, nodeX, nodeY);
+        ctx.textBaseline = 'alphabetic';
+      }
+
+      const nameX = listX + 55 + nodeSize;
+      const nameSize = isPortrait ? 14 * uiScale : 16;
+      const descSize = isPortrait ? 10 * uiScale : 11;
+
+      ctx.fillStyle = isUnlocked ? '#ffffff' : '#555';
+      ctx.shadowBlur = (isSelected && isUnlocked) ? 6 : 0;
+      ctx.shadowColor = diffCfg.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(event.name, nameX, iy + itemH * 0.35);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = isUnlocked ? '#888' : '#333';
+      ctx.font = `${descSize}px monospace`;
+      ctx.fillText(event.description, nameX, iy + itemH * 0.6);
+
+      const diffBadgeW = isPortrait ? 48 * uiScale : 55;
+      const diffBadgeH = isPortrait ? 20 * uiScale : 22;
+      const diffBadgeX = listX + listW - diffBadgeW - 22;
+      const diffBadgeY = iy + 8;
+
+      ctx.fillStyle = isUnlocked ? `${diffCfg.color}20` : 'rgba(60,60,60,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(diffBadgeX, diffBadgeY, diffBadgeW, diffBadgeH, diffBadgeH / 2);
+      ctx.fill();
+      ctx.strokeStyle = isUnlocked ? diffCfg.color : '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(diffBadgeX, diffBadgeY, diffBadgeW, diffBadgeH, diffBadgeH / 2);
+      ctx.stroke();
+      ctx.fillStyle = isUnlocked ? diffCfg.color : '#555';
+      ctx.font = `bold ${descSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(diffCfg.label, diffBadgeX + diffBadgeW / 2, diffBadgeY + diffBadgeH * 0.72);
+      ctx.textAlign = 'left';
+
+      const infoSize = descSize;
+      const infoY = iy + itemH - 14;
+      ctx.fillStyle = isUnlocked ? '#666' : '#333';
+      ctx.font = `${infoSize}px monospace`;
+      ctx.fillText(`${event.laps}圈`, nameX, infoY);
+
+      ctx.fillStyle = isUnlocked ? '#ffd700' : '#444';
+      ctx.textAlign = 'right';
+      ctx.fillText(`💰 ${event.reward}`, listX + listW - 22, infoY);
+      ctx.textAlign = 'left';
+    });
+
+    const totalEvents = career.getTotalEventCount();
+    const doneEvents = career.getCompletedEventCount();
+    const hintSize = isPortrait ? 9 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`进度: ${doneEvents}/${totalEvents}  |  ←→ 切换阶段  ↑↓ 选择关卡  回车 进入  U 升级`, centerX, this.height - (isPortrait ? 55 : 45));
+    ctx.fillText(`ESC 返回主菜单  |  点击卡片进入比赛`, centerX, this.height - (isPortrait ? 38 : 28));
+
+    ctx.restore();
+  }
+
+  _drawCareerBackground() {
+    const ctx = this.ctx;
+    const gradient = ctx.createRadialGradient(
+      this.width * 0.3, this.height * 0.3, 0,
+      this.width * 0.3, this.height * 0.3, this.width * 0.6
+    );
+    gradient.addColorStop(0, 'rgba(0, 245, 255, 0.04)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const gradient2 = ctx.createRadialGradient(
+      this.width * 0.7, this.height * 0.7, 0,
+      this.width * 0.7, this.height * 0.7, this.width * 0.5
+    );
+    gradient2.addColorStop(0, 'rgba(255, 0, 255, 0.04)');
+    gradient2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient2;
+    ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  _drawCareerTopButton(x, y, w, h, label, color, accent) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(30, 30, 50, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = `bold ${h * 0.36}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  _drawNavArrow(x, y, size, label, color) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y, size / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = `bold ${size * 0.45}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + size / 2, y + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  drawCareerEvent(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+    const selected = career.getSelectedEvent();
+    if (!selected) return;
+
+    const { event, stage } = selected;
+    const diffCfg = DifficultySettings[event.difficulty];
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(8, 8, 20, 0.98)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    this._drawCareerBackground();
+
+    const bgAlpha = 0.08;
+    ctx.fillStyle = `${stage.color}${Math.round(bgAlpha * 255).toString(16).padStart(2, '0')}`;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const panelW = isPortrait ? Math.min(340 * uiScale, this.width * 0.9) : 480;
+    const panelH = isPortrait ? 520 * uiScale : 480;
+    const panelX = centerX - panelW / 2;
+    const panelY = (this.height - panelH) / 2;
+
+    ctx.fillStyle = 'rgba(18, 18, 38, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 16 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = diffCfg.color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = diffCfg.color;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 16 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const headerH = isPortrait ? 80 * uiScale : 90;
+    const headerGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + headerH);
+    headerGrad.addColorStop(0, `${diffCfg.color}25`);
+    headerGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = headerGrad;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, headerH, { tl: 16 * uiScale, tr: 16 * uiScale, br: 0, bl: 0 });
+    ctx.fill();
+
+    const titleSize = isPortrait ? 24 * uiScale : 30;
+    const stageLabelSize = isPortrait ? 11 * uiScale : 13;
+    const eventNumSize = isPortrait ? 38 * uiScale : 48;
+    const infoLabelSize = isPortrait ? 11 * uiScale : 12;
+    const infoValueSize = isPortrait ? 18 * uiScale : 22;
+
+    ctx.fillStyle = stage.color;
+    ctx.font = `bold ${stageLabelSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${stage.name} · ${stage.subtitle}`, centerX, panelY + 28 * uiScale);
+
+    ctx.fillStyle = diffCfg.color;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = diffCfg.color;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.fillText(event.name, centerX, panelY + (isPortrait ? 58 * uiScale : 62));
+    ctx.shadowBlur = 0;
+
+    const badgeY = panelY + headerH + 18 * uiScale;
+    const badgeW = isPortrait ? 64 * uiScale : 72;
+    const badgeH = isPortrait ? 64 * uiScale : 72;
+    const badgeX = centerX - badgeW / 2;
+
+    const badgePulse = Math.sin(Date.now() * 0.004) * 0.15 + 0.85;
+    ctx.fillStyle = `${diffCfg.color}20`;
+    ctx.beginPath();
+    ctx.arc(centerX, badgeY + badgeH / 2, badgeW / 2 * badgePulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = diffCfg.color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = diffCfg.color;
+    ctx.beginPath();
+    ctx.arc(centerX, badgeY + badgeH / 2, badgeW / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = diffCfg.color;
+    ctx.font = `bold ${eventNumSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${stage.events.indexOf(event) + 1}`, centerX, badgeY + badgeH / 2);
+    ctx.textBaseline = 'alphabetic';
+
+    const diffBadgeW = isPortrait ? 70 * uiScale : 80;
+    const diffBadgeH = isPortrait ? 22 * uiScale : 26;
+    ctx.fillStyle = `${diffCfg.color}25`;
+    ctx.beginPath();
+    ctx.roundRect(centerX - diffBadgeW / 2, badgeY + badgeH + 8, diffBadgeW, diffBadgeH, diffBadgeH / 2);
+    ctx.fill();
+    ctx.strokeStyle = diffCfg.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(centerX - diffBadgeW / 2, badgeY + badgeH + 8, diffBadgeW, diffBadgeH, diffBadgeH / 2);
+    ctx.stroke();
+    ctx.fillStyle = diffCfg.color;
+    ctx.font = `bold ${stageLabelSize}px monospace`;
+    ctx.fillText(diffCfg.label, centerX, badgeY + badgeH + 8 + diffBadgeH * 0.72);
+
+    const infoStartY = badgeY + badgeH + diffBadgeH + 35 * uiScale;
+    const infoItemW = isPortrait ? 130 * uiScale : 180;
+    const infoItemH = isPortrait ? 56 * uiScale : 62;
+    const infoGap = isPortrait ? 12 * uiScale : 18;
+    const infoTotalW = infoItemW * 2 + infoGap;
+    const infoStartX = centerX - infoTotalW / 2;
+
+    const infos = [
+      { label: '圈数', value: `${event.laps}`, color: '#00f5ff', icon: '🏁' },
+      { label: '奖金', value: `${event.reward}`, color: '#ffd700', icon: '💰' },
+      { label: '难度', value: diffCfg.label, color: diffCfg.color, icon: '⚔️' },
+      { label: '对手', value: `${diffCfg.aiCount}`, color: '#ff00ff', icon: '🏍️' }
+    ];
+
+    infos.forEach((info, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const ix = infoStartX + col * (infoItemW + infoGap);
+      const iy = infoStartY + row * (infoItemH + infoGap * 0.6);
+
+      ctx.fillStyle = `${info.color}12`;
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, infoItemW, infoItemH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = `${info.color}55`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, infoItemW, infoItemH, 10 * uiScale);
+      ctx.stroke();
+
+      ctx.fillStyle = '#666';
+      ctx.font = `${infoLabelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${info.icon} ${info.label}`, ix + 12 * uiScale, iy + 20 * uiScale);
+
+      ctx.fillStyle = info.color;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = info.color;
+      ctx.font = `bold ${infoValueSize}px monospace`;
+      ctx.textAlign = 'right';
+      const suffix = info.label === '圈数' ? ' 圈' : (info.label === '奖金' ? '' : (info.label === '对手' ? ' 人' : ''));
+      ctx.fillText(info.value + suffix, ix + infoItemW - 12 * uiScale, iy + infoItemH - 14 * uiScale);
+      ctx.shadowBlur = 0;
+    });
+
+    const descY = infoStartY + 2 * (infoItemH + infoGap * 0.6) + 8 * uiScale;
+    ctx.fillStyle = '#888';
+    ctx.font = `${stageLabelSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`📝 ${event.description}`, centerX, descY);
+
+    const bestResult = career.getEventBestResult(event.id);
+    if (bestResult) {
+      const bestY = descY + (isPortrait ? 22 * uiScale : 28);
+      ctx.fillStyle = '#00ff66';
+      ctx.font = `bold ${stageLabelSize + 1}px monospace`;
+      ctx.fillText(`🏆 最佳: #${bestResult.rank}名  ${Utils.formatTime(bestResult.time)}`, centerX, bestY);
+    }
+
+    const btnH = isPortrait ? 50 * uiScale : 54;
+    const btnY = panelY + panelH - btnH - 22 * uiScale;
+    const totalBtnW = isPortrait ? 280 * uiScale : 340;
+    const btnGap = isPortrait ? 12 * uiScale : 18;
+    const btnW = (totalBtnW - btnGap) / 2;
+    const btnX = centerX - totalBtnW / 2;
+
+    this._drawActionButton(btnX, btnY, btnW, btnH, '← 返回', '#666', '#444', false);
+    this._drawActionButton(btnX + btnW + btnGap, btnY, btnW, btnH, '开始比赛 🏁', '#00ff66', '#008833', true);
+
+    const hintSize = isPortrait ? 10 * uiScale : 12;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.fillText('回车开始  |  ESC 返回地图', centerX, panelY + panelH - 6 * uiScale);
+
+    ctx.restore();
+  }
+
+  _drawActionButton(x, y, w, h, label, color, accent, primary) {
+    const ctx = this.ctx;
+    const time = Date.now() * 0.003;
+    const pulse = primary ? (Math.sin(time) * 0.1 + 0.9) : 1;
+
+    const bgColor = primary ? `${color}18` : 'rgba(40, 40, 60, 0.8)';
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = primary ? 2 : 1.5;
+    if (primary) {
+      ctx.shadowBlur = 15 * pulse;
+      ctx.shadowColor = color;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = color;
+    if (primary) {
+      ctx.shadowBlur = 8 * pulse;
+      ctx.shadowColor = color;
+    }
+    ctx.font = `bold ${h * 0.36}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + w / 2, y + h / 2 + 2);
+    ctx.shadowBlur = 0;
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  drawCareerUpgrade(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+    const cursor = game.careerUpgradeCursor;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(8, 8, 20, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+    this._drawCareerBackground();
+
+    const topBarY = isPortrait ? 18 * uiScale : 20;
+    const btnW = isPortrait ? 80 * uiScale : 90;
+    const btnH = isPortrait ? 36 * uiScale : 40;
+    this._drawCareerTopButton(
+      isPortrait ? 15 * uiScale : 20, topBarY, btnW, btnH,
+      '← 返回', '#666', '#444'
+    );
+
+    const titleSize = isPortrait ? 24 * uiScale : 30;
+    const subtitleSize = isPortrait ? 12 * uiScale : 14;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = '#ffff00';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🔧 车辆改装厂', centerX, isPortrait ? 52 * uiScale : 55);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText('使用奖金提升车辆性能', centerX, isPortrait ? 75 * uiScale : 80);
+
+    const coinsY = isPortrait ? 105 * uiScale : 110;
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ffd700';
+    ctx.font = `bold ${titleSize * 0.85}px monospace`;
+    ctx.fillText(`💰 ${career.coins} 金币`, centerX, coinsY);
+    ctx.shadowBlur = 0;
+
+    const listTop = coinsY + (isPortrait ? 30 * uiScale : 35);
+    const listBottom = isPortrait ? this.height - 90 * uiScale : this.height - 70;
+    const listW = isPortrait ? Math.min(380 * uiScale, this.width * 0.92) : 560;
+    const listX = centerX - listW / 2;
+
+    const itemCount = UpgradeTypeKeys.length;
+    const itemGap = isPortrait ? 10 * uiScale : 14;
+    const itemH = isPortrait ? 78 * uiScale : 88;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = listTop + Math.max(0, (listBottom - listTop - totalItemH) / 2);
+
+    UpgradeTypeKeys.forEach((key, i) => {
+      const upgrade = UpgradeTypes[key];
+      const iy = startY + i * (itemH + itemGap);
+      const level = career.getUpgradeLevel(key);
+      const maxed = level >= upgrade.maxLevel;
+      const cost = maxed ? 'MAX' : career.calculateUpgradeCost(key);
+      const canBuy = !maxed && career.canUpgrade(key);
+      const isSelected = cursor === i;
+      const bonus = career.getTotalUpgradeBonus(key);
+
+      if (isSelected) {
+        ctx.fillStyle = `${upgrade.color}12`;
+        ctx.beginPath();
+        ctx.roundRect(listX + 4, iy - 2, listW - 8, itemH + 4, 12 * uiScale);
+        ctx.fill();
+        ctx.strokeStyle = upgrade.color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = upgrade.color;
+        ctx.beginPath();
+        ctx.roundRect(listX + 4, iy - 2, listW - 8, itemH + 4, 12 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.fillStyle = 'rgba(20, 20, 40, 0.7)';
+      ctx.beginPath();
+      ctx.roundRect(listX + 10, iy, listW - 20, itemH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = isSelected ? upgrade.color : 'rgba(80,80,120,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(listX + 10, iy, listW - 20, itemH, 10 * uiScale);
+      ctx.stroke();
+
+      const iconSize = isPortrait ? 38 * uiScale : 44;
+      const iconX = listX + 30;
+      const iconY = iy + itemH / 2;
+
+      ctx.fillStyle = `${upgrade.color}20`;
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, iconSize / 2 + 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = upgrade.color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.font = `${iconSize * 0.55}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(upgrade.icon, iconX, iconY);
+      ctx.textBaseline = 'alphabetic';
+
+      const nameX = listX + 30 + iconSize + 16;
+      const nameSize = isPortrait ? 15 * uiScale : 17;
+      const descSize = isPortrait ? 10 * uiScale : 11;
+
+      ctx.fillStyle = upgrade.color;
+      ctx.shadowBlur = isSelected ? 6 : 0;
+      ctx.shadowColor = upgrade.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(upgrade.name, nameX, iy + 22 * uiScale);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#777';
+      ctx.font = `${descSize}px monospace`;
+      ctx.fillText(upgrade.description, nameX, iy + 40 * uiScale);
+
+      const statLabelX = nameX;
+      const statLabelY = iy + 58 * uiScale;
+      ctx.fillStyle = '#555';
+      ctx.font = `${descSize - 1}px monospace`;
+      ctx.fillText('当前加成:', statLabelX, statLabelY);
+      ctx.fillStyle = upgrade.color;
+      ctx.font = `bold ${descSize}px monospace`;
+      let bonusStr = '';
+      if (key === 'handling') bonusStr = `+${bonus.toFixed(1)}`;
+      else bonusStr = `+${bonus}`;
+      ctx.fillText(bonusStr, statLabelX + 62 * uiScale, statLabelY);
+
+      const levelBarW = isPortrait ? 110 * uiScale : 130;
+      const levelBarH = isPortrait ? 5 * uiScale : 6;
+      const levelBarX = listX + listW - levelBarW - 24;
+      const levelBarY = iy + 18 * uiScale;
+
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.roundRect(levelBarX, levelBarY, levelBarW, levelBarH, levelBarH / 2);
+      ctx.fill();
+
+      const fillW = levelBarW * (level / upgrade.maxLevel);
+      const levelGrad = ctx.createLinearGradient(levelBarX, 0, levelBarX + levelBarW, 0);
+      levelGrad.addColorStop(0, upgrade.color);
+      levelGrad.addColorStop(1, upgrade.color + '77');
+      ctx.fillStyle = levelGrad;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = upgrade.color;
+      ctx.beginPath();
+      ctx.roundRect(levelBarX, levelBarY, fillW, levelBarH, levelBarH / 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#aaa';
+      ctx.font = `bold ${descSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`Lv.${level}/${upgrade.maxLevel}`, levelBarX + levelBarW, levelBarY + levelBarH + 14 * uiScale);
+
+      const costBtnW = isPortrait ? 100 * uiScale : 120;
+      const costBtnH = isPortrait ? 30 * uiScale : 34;
+      const costBtnX = listX + listW - costBtnW - 24;
+      const costBtnY = iy + itemH - costBtnH - 12 * uiScale;
+
+      if (maxed) {
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(costBtnX, costBtnY, costBtnW, costBtnH, costBtnH / 2);
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#00ff66';
+        ctx.beginPath();
+        ctx.roundRect(costBtnX, costBtnY, costBtnW, costBtnH, costBtnH / 2);
+        ctx.stroke();
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${descSize + 1}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🏆 满级', costBtnX + costBtnW / 2, costBtnY + costBtnH / 2 + 1);
+        ctx.textBaseline = 'alphabetic';
+      } else {
+        const buyColor = canBuy ? '#ffd700' : '#555';
+        ctx.fillStyle = canBuy ? 'rgba(255, 215, 0, 0.15)' : 'rgba(60,60,60,0.2)';
+        ctx.beginPath();
+        ctx.roundRect(costBtnX, costBtnY, costBtnW, costBtnH, costBtnH / 2);
+        ctx.fill();
+        ctx.strokeStyle = buyColor;
+        ctx.lineWidth = canBuy ? 1.8 : 1;
+        if (canBuy && isSelected) {
+          const bp = Math.sin(Date.now() * 0.006) * 0.2 + 0.8;
+          ctx.shadowBlur = 10 * bp;
+          ctx.shadowColor = buyColor;
+        }
+        ctx.beginPath();
+        ctx.roundRect(costBtnX, costBtnY, costBtnW, costBtnH, costBtnH / 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = buyColor;
+        ctx.font = `bold ${descSize + 1}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`💰 ${cost}`, costBtnX + costBtnW / 2, costBtnY + costBtnH / 2 + 1);
+        ctx.textBaseline = 'alphabetic';
+      }
+      ctx.textAlign = 'left';
+    });
+
+    const hintSize = isPortrait ? 10 * uiScale : 12;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 选择  |  回车/点击 升级  |  ESC 返回', centerX, this.height - (isPortrait ? 38 : 28));
+
+    ctx.restore();
+  }
+
+  drawCareerStageClear(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+
+    const lastCompleted = career.completedStages[career.completedStages.length - 1];
+    const stage = CareerStages.find(s => s.id === lastCompleted) || career.getCurrentStage();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const time = Date.now() * 0.001;
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2 + time;
+      const dist = 80 + Math.sin(time * 2 + i) * 30;
+      const px = centerX + Math.cos(angle) * dist * (isPortrait ? uiScale : 1.2);
+      const py = centerY + Math.sin(angle) * dist * (isPortrait ? uiScale : 1.2);
+      const alpha = 0.3 + Math.sin(time * 3 + i) * 0.2;
+      ctx.fillStyle = `${stage.color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
+      ctx.beginPath();
+      ctx.arc(px, py, 3 + Math.sin(time + i) * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const pulseGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, isPortrait ? 300 * uiScale : 400);
+    pulseGrad.addColorStop(0, `${stage.color}25`);
+    pulseGrad.addColorStop(0.5, `${stage.color}10`);
+    pulseGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = pulseGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const panelW = isPortrait ? Math.min(340 * uiScale, this.width * 0.9) : 450;
+    const panelH = isPortrait ? 440 * uiScale : 400;
+    const panelX = centerX - panelW / 2;
+    const panelY = centerY - panelH / 2;
+    const panelPulse = Math.sin(time * 2) * 0.05 + 1;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.scale(panelPulse, panelPulse);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.fillStyle = 'rgba(12, 12, 30, 0.96)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 20 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = stage.color;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = stage.color;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 20 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    const trophySize = isPortrait ? 70 * uiScale : 80;
+    const trophyY = panelY + 55 * uiScale;
+    const trophyPulse = Math.sin(time * 4) * 0.08 + 1;
+
+    ctx.save();
+    ctx.translate(centerX, trophyY);
+    ctx.scale(trophyPulse, trophyPulse);
+    ctx.font = `${trophySize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillText('🏆', 0, 0);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    const titleSize = isPortrait ? 28 * uiScale : 36;
+    const subTitleSize = isPortrait ? 15 * uiScale : 18;
+    const infoSize = isPortrait ? 13 * uiScale : 15;
+
+    ctx.fillStyle = stage.color;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = stage.color;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('阶段通关!', centerX, panelY + trophySize + 80 * uiScale);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = stage.color;
+    ctx.font = `bold ${subTitleSize}px monospace`;
+    ctx.fillText(stage.name, centerX, panelY + trophySize + 80 * uiScale + (isPortrait ? 30 * uiScale : 36));
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${infoSize}px monospace`;
+    ctx.fillText(stage.subtitle + ' 全部完成', centerX, panelY + trophySize + 80 * uiScale + (isPortrait ? 54 * uiScale : 62));
+
+    const rewardY = panelY + trophySize + 80 * uiScale + (isPortrait ? 95 * uiScale : 105);
+    const rewardW = isPortrait ? 200 * uiScale : 240;
+    const rewardH = isPortrait ? 60 * uiScale : 68;
+    const rewardX = centerX - rewardW / 2;
+    const rewardPulse = Math.sin(time * 3) * 0.04 + 1;
+
+    ctx.save();
+    ctx.translate(centerX, rewardY + rewardH / 2);
+    ctx.scale(rewardPulse, rewardPulse);
+    ctx.translate(-centerX, -(rewardY + rewardH / 2));
+
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.12)';
+    ctx.beginPath();
+    ctx.roundRect(rewardX, rewardY, rewardW, rewardH, 14 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = '#ffd700';
+    ctx.beginPath();
+    ctx.roundRect(rewardX, rewardY, rewardW, rewardH, 14 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `bold ${infoSize}px monospace`;
+    ctx.fillText('🎉 通关奖励', centerX, rewardY + 24 * uiScale);
+    ctx.font = `bold ${titleSize * 0.75}px monospace`;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#ffd700';
+    ctx.fillText(`💰 +${stage.reward}`, centerX, rewardY + rewardH - 16 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const stageIdx = CareerStages.findIndex(s => s.id === stage.id);
+    const nextStage = CareerStages[stageIdx + 1];
+    const hintY = panelY + panelH - 40 * uiScale;
+
+    if (nextStage) {
+      ctx.fillStyle = nextStage.color;
+      ctx.font = `${infoSize}px monospace`;
+      ctx.fillText(`✨ 已解锁: ${nextStage.name}`, centerX, hintY - 20 * uiScale);
+    }
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${infoSize}px monospace`;
+    ctx.fillText('回车 / 点击 继续生涯', centerX, hintY);
+
+    ctx.restore();
+  }
+
+  drawCareerRaceResult(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+    const result = game.careerRaceResultData || career.lastRaceResult;
+
+    if (!result) return;
+
+    const selected = career.getEventById(result.eventId || career.selectedEventId);
+    const event = selected ? selected.event : null;
+    const stage = selected ? selected.stage : null;
+    const diffCfg = event ? DifficultySettings[event.difficulty] : DifficultySettings.normal;
+
+    const rank = result.rank;
+    const rankColors = { 1: '#ffd700', 2: '#c0c0c0', 3: '#cd7f32' };
+    const rankColor = rankColors[rank] || '#ff6666';
+    const rankEmoji = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    const emoji = rankEmoji[rank] || '🏁';
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(6, 6, 18, 0.96)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    if (rank <= 3) {
+      const bgGrad = ctx.createRadialGradient(centerX, this.height * 0.35, 0, centerX, this.height * 0.35, this.width * 0.5);
+      bgGrad.addColorStop(0, `${rankColor}18`);
+      bgGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    const panelW = isPortrait ? Math.min(350 * uiScale, this.width * 0.92) : 460;
+    const panelH = isPortrait ? 560 * uiScale : 500;
+    const panelX = centerX - panelW / 2;
+    const panelY = (this.height - panelH) / 2;
+
+    ctx.fillStyle = 'rgba(14, 14, 34, 0.96)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 18 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = rankColor;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = rankColor;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 18 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const headerH = isPortrait ? 120 * uiScale : 130;
+    const headerGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + headerH);
+    headerGrad.addColorStop(0, `${rankColor}30`);
+    headerGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = headerGrad;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, headerH, { tl: 18 * uiScale, tr: 18 * uiScale, br: 0, bl: 0 });
+    ctx.fill();
+
+    const titleSize = isPortrait ? 16 * uiScale : 18;
+    ctx.fillStyle = event ? diffCfg.color : '#888';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    if (stage && event) {
+      ctx.fillText(`${stage.name} · ${event.name}`, centerX, panelY + 30 * uiScale);
+    }
+
+    const rankEmojiSize = isPortrait ? 68 * uiScale : 78;
+    const rankTextSize = isPortrait ? 38 * uiScale : 46;
+    const rankY = panelY + 75 * uiScale;
+
+    ctx.font = `${rankEmojiSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = rankColor;
+    ctx.fillText(emoji, centerX - 8 * uiScale, rankY);
+
+    ctx.fillStyle = rankColor;
+    ctx.font = `bold ${rankTextSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`第 ${rank} 名`, centerX + 8 * uiScale, rankY);
+    ctx.shadowBlur = 0;
+    ctx.textBaseline = 'alphabetic';
+
+    if (result.isNewBest) {
+      const nbSize = isPortrait ? 13 * uiScale : 15;
+      const nbY = panelY + headerH + 6 * uiScale;
+      const nbPulse = Math.sin(Date.now() * 0.006) * 0.15 + 0.85;
+      ctx.fillStyle = `rgba(255, 102, 0, ${0.2 * nbPulse})`;
+      const nbW = isPortrait ? 180 * uiScale : 200;
+      ctx.beginPath();
+      ctx.roundRect(centerX - nbW / 2, nbY - 12 * uiScale, nbW, 28 * uiScale, 14);
+      ctx.fill();
+      ctx.fillStyle = '#ff6600';
+      ctx.shadowBlur = 10 * nbPulse;
+      ctx.shadowColor = '#ff6600';
+      ctx.font = `bold ${nbSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('⭐ 个人最佳纪录! ⭐', centerX, nbY + 6 * uiScale);
+      ctx.shadowBlur = 0;
+    }
+
+    const infoStartY = panelY + headerH + (result.isNewBest ? 42 : 25) * uiScale;
+    const infoItemW = isPortrait ? 135 * uiScale : 170;
+    const infoItemH = isPortrait ? 58 * uiScale : 64;
+    const infoGap = isPortrait ? 14 * uiScale : 20;
+    const infoTotalW = infoItemW * 2 + infoGap;
+    const infoStartX = centerX - infoTotalW / 2;
+
+    const infos = [
+      { label: '总用时', value: Utils.formatTime(result.time), color: '#00f5ff', icon: '⏱️' },
+      { label: '最佳单圈', value: result.bestLap ? Utils.formatTime(result.bestLap) : '--:--:--', color: '#00ff66', icon: '🏁' },
+      { label: '比赛圈数', value: event ? `${event.laps} 圈` : '-', color: '#ff00ff', icon: '🔄' },
+      { label: '难度', value: event ? diffCfg.label : '-', color: diffCfg.color, icon: '⚔️' }
+    ];
+
+    infos.forEach((info, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const ix = infoStartX + col * (infoItemW + infoGap);
+      const iy = infoStartY + row * (infoItemH + infoGap * 0.7);
+
+      ctx.fillStyle = `${info.color}14`;
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, infoItemW, infoItemH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = `${info.color}50`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, infoItemW, infoItemH, 10 * uiScale);
+      ctx.stroke();
+
+      const labelSize = isPortrait ? 11 * uiScale : 12;
+      const valueSize = isPortrait ? 17 * uiScale : 20;
+
+      ctx.fillStyle = '#666';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${info.icon} ${info.label}`, ix + 12 * uiScale, iy + 22 * uiScale);
+
+      ctx.fillStyle = info.color;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = info.color;
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(info.value, ix + infoItemW - 12 * uiScale, iy + infoItemH - 16 * uiScale);
+      ctx.shadowBlur = 0;
+    });
+
+    const rewardStartY = infoStartY + 2 * (infoItemH + infoGap * 0.7) + 10 * uiScale;
+    const rewardH = isPortrait ? 72 * uiScale : 78;
+
+    const coinsPulse = Math.sin(Date.now() * 0.004) * 0.05 + 1;
+    ctx.save();
+    ctx.translate(centerX, rewardStartY + rewardH / 2);
+    ctx.scale(coinsPulse, coinsPulse);
+    ctx.translate(-centerX, -(rewardStartY + rewardH / 2));
+
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + 20, rewardStartY, panelW - 40, rewardH, 12 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#ffd700';
+    ctx.beginPath();
+    ctx.roundRect(panelX + 20, rewardStartY, panelW - 40, rewardH, 12 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    const rewardLabelSize = isPortrait ? 12 * uiScale : 13;
+    const rewardValueSize = isPortrait ? 22 * uiScale : 26;
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${rewardLabelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('💰 获得奖金', panelX + 38 * uiScale, rewardStartY + rewardH * 0.4);
+
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ffd700';
+    ctx.font = `bold ${rewardValueSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`+${result.coinsEarned}`, panelX + panelW - 38 * uiScale, rewardStartY + rewardH * 0.45);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${rewardLabelSize - 1}px monospace`;
+    ctx.fillText(`当前总金币: ${career.coins}`, panelX + panelW - 38 * uiScale, rewardStartY + rewardH * 0.82);
+    ctx.textAlign = 'left';
+
+    const btnH = isPortrait ? 48 * uiScale : 52;
+    const btnY = panelY + panelH - btnH - 18 * uiScale;
+    const btnW = isPortrait ? 260 * uiScale : 300;
+
+    this._drawActionButton(centerX - btnW / 2, btnY, btnW, btnH,
+      career.showingStageClear ? '查看阶段奖励 →' : '继续生涯 →',
+      stage ? stage.color : '#00f5ff', '#006688', true);
+
+    const hintSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('回车 / 点击 继续  |  ESC 返回地图', centerX, panelY + panelH - 4 * uiScale);
+
     ctx.restore();
   }
 }

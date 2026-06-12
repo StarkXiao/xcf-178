@@ -2,6 +2,11 @@ const GameState = {
   MENU: 'menu',
   VEHICLE_SELECT: 'vehicleSelect',
   ACHIEVEMENTS: 'achievements',
+  CAREER_MAP: 'careerMap',
+  CAREER_EVENT: 'careerEvent',
+  CAREER_UPGRADE: 'careerUpgrade',
+  CAREER_STAGE_CLEAR: 'careerStageClear',
+  CAREER_RACE_RESULT: 'careerRaceResult',
   COUNTDOWN: 'countdown',
   RACING: 'racing',
   PAUSED: 'paused',
@@ -165,12 +170,19 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 6;
+    this.menuItemCount = 7;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
     this.achievementScrollY = 0;
     this.achievements = new AchievementManager();
+
+    this.career = new CareerManager();
+    this.careerStageCursor = 0;
+    this.careerEventCursor = 0;
+    this.careerUpgradeCursor = 0;
+    this.careerRaceResultData = null;
+    this._isCareerMode = false;
 
     this.track = null;
     this.player = null;
@@ -325,6 +337,24 @@ class Game {
       } else if (this.state === GameState.ACHIEVEMENTS) {
         this.state = GameState.MENU;
         this.menuCursor = 3;
+        this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.CAREER_MAP) {
+        this._handleCareerMapClick(e);
+      } else if (this.state === GameState.CAREER_EVENT) {
+        this._handleCareerEventClick(e);
+      } else if (this.state === GameState.CAREER_UPGRADE) {
+        this._handleCareerUpgradeClick(e);
+      } else if (this.state === GameState.CAREER_STAGE_CLEAR) {
+        this.career.showingStageClear = false;
+        this.state = GameState.CAREER_MAP;
+        this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.CAREER_RACE_RESULT) {
+        if (this.career.showingStageClear) {
+          this.career.showingStageClear = false;
+          this.state = GameState.CAREER_STAGE_CLEAR;
+        } else {
+          this.state = GameState.CAREER_MAP;
+        }
         this.touchManager.vibrate('menuSelect');
       } else if (this.state === GameState.PAUSED) {
         this._handlePauseClick(e);
@@ -545,8 +575,9 @@ class Game {
     const itemY1 = itemY0 + itemSpacing;
     const itemY2 = itemY1 + itemSpacing;
     const itemY3 = itemY2 + itemSpacing;
-    const itemY4 = itemY3 + itemSpacing + 8 * uiScale;
-    const itemY5 = itemY4 + itemSpacing;
+    const itemY4 = itemY3 + itemSpacing;
+    const itemY5 = itemY4 + itemSpacing + 8 * uiScale;
+    const itemY6 = itemY5 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -562,14 +593,18 @@ class Game {
         this._openVehicleSelect();
       } else if (y >= itemY3 && y < itemY3 + 45) {
         this.menuCursor = 3;
-        this._openAchievements();
+        this._openCareerMap();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY4 && y < itemY4 + 45) {
         this.menuCursor = 4;
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY5 && y < itemY5 + 45) {
         this.menuCursor = 5;
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      } else if (y >= itemY6 && y < itemY6 + 45) {
+        this.menuCursor = 6;
         this.startGame();
       }
     }
@@ -616,6 +651,21 @@ class Game {
       case GameState.ACHIEVEMENTS:
         this._updateAchievements();
         break;
+      case GameState.CAREER_MAP:
+        this._updateCareerMap();
+        break;
+      case GameState.CAREER_EVENT:
+        this._updateCareerEvent();
+        break;
+      case GameState.CAREER_UPGRADE:
+        this._updateCareerUpgrade();
+        break;
+      case GameState.CAREER_STAGE_CLEAR:
+        this._updateCareerStageClear();
+        break;
+      case GameState.CAREER_RACE_RESULT:
+        this._updateCareerRaceResult();
+        break;
       case GameState.COUNTDOWN:
         this._updateCountdown(dt);
         break;
@@ -653,15 +703,20 @@ class Game {
       }
     } else if (this.menuCursor === 3) {
       if (this.input.isMenuConfirm()) {
-        this._openAchievements();
+        this._openCareerMap();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 4) {
       if (this.input.isMenuConfirm()) {
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 5) {
+      if (this.input.isMenuConfirm()) {
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      }
+    } else if (this.menuCursor === 6) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -682,6 +737,57 @@ class Game {
     this.state = GameState.ACHIEVEMENTS;
   }
 
+  _openCareerMap() {
+    this._isCareerMode = true;
+    this.careerStageCursor = 0;
+    this.careerEventCursor = 0;
+    this.state = GameState.CAREER_MAP;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _openCareerEventDetail() {
+    const stage = this.career.getStage(this.careerStageCursor);
+    if (!stage) return;
+    const event = stage.events[this.careerEventCursor];
+    if (!event) return;
+    if (!this.career.isEventUnlocked(event.id)) return;
+
+    this.career.selectEvent(event.id);
+    this.state = GameState.CAREER_EVENT;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _openCareerUpgrade() {
+    this.careerUpgradeCursor = 0;
+    this.state = GameState.CAREER_UPGRADE;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _startCareerRace() {
+    const selected = this.career.getSelectedEvent();
+    if (!selected) return;
+
+    const event = selected.event;
+    this.difficulty = event.difficulty;
+    this.totalLaps = event.laps;
+    this.lapIndex = LapOptions.indexOf(event.laps);
+    if (this.lapIndex < 0) this.lapIndex = 1;
+
+    this._applySettings();
+    this._resetRace();
+    this.career.applyUpgradesToBike(this.player, this.selectedVehicle);
+
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+
+    this._prevStateBeforePause = null;
+    this.state = GameState.COUNTDOWN;
+    this.countdown = 3;
+    this.countdownTimer = 0;
+  }
+
   _updateAchievements() {
     if (this.input.isMenuUp()) {
       this.achievementCursor = (this.achievementCursor - 1 + AchievementLineKeys.length) % AchievementLineKeys.length;
@@ -695,6 +801,127 @@ class Game {
       this.input.keys['Escape'] = false;
       this.state = GameState.MENU;
       this.menuCursor = 3;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
+  }
+
+  _updateCareerMap() {
+    const stages = this.career.getStages();
+    const currentStage = stages[this.careerStageCursor];
+    const eventCount = currentStage ? currentStage.events.length : 0;
+
+    if (this.input.isMenuLeft()) {
+      this.careerStageCursor = (this.careerStageCursor - 1 + stages.length) % stages.length;
+      this.careerEventCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuRight()) {
+      this.careerStageCursor = (this.careerStageCursor + 1) % stages.length;
+      this.careerEventCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuUp()) {
+      if (this.careerEventCursor > 0) {
+        this.careerEventCursor--;
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+    if (this.input.isMenuDown()) {
+      if (this.careerEventCursor < eventCount - 1) {
+        this.careerEventCursor++;
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+
+    if (this.input.isMenuConfirm()) {
+      if (currentStage && this.career.isStageUnlocked(this.careerStageCursor)) {
+        const event = currentStage.events[this.careerEventCursor];
+        if (event && this.career.isEventUnlocked(event.id)) {
+          this._openCareerEventDetail();
+        }
+      }
+    }
+
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.menuCursor = 3;
+      this._isCareerMode = false;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.keys['KeyU']) {
+      this.input.keys['KeyU'] = false;
+      this._openCareerUpgrade();
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _updateCareerEvent() {
+    if (this.input.isMenuConfirm()) {
+      this._startCareerRace();
+    }
+
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.CAREER_MAP;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _updateCareerUpgrade() {
+    const upgradeCount = UpgradeTypeKeys.length;
+
+    if (this.input.isMenuUp()) {
+      this.careerUpgradeCursor = (this.careerUpgradeCursor - 1 + upgradeCount) % upgradeCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.careerUpgradeCursor = (this.careerUpgradeCursor + 1) % upgradeCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuConfirm()) {
+      const upgradeId = UpgradeTypeKeys[this.careerUpgradeCursor];
+      if (this.career.canUpgrade(upgradeId)) {
+        this.career.upgradeVehicle(upgradeId);
+        this.touchManager.vibrate('newRecord');
+      } else {
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.CAREER_MAP;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _updateCareerStageClear() {
+    if (this.input.isMenuConfirm()) {
+      this.career.showingStageClear = false;
+      this.state = GameState.CAREER_MAP;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
+  }
+
+  _updateCareerRaceResult() {
+    if (this.input.isMenuConfirm()) {
+      if (this.career.showingStageClear) {
+        this.career.showingStageClear = false;
+        this.state = GameState.CAREER_STAGE_CLEAR;
+      } else {
+        this.state = GameState.CAREER_MAP;
+      }
       this.touchManager.vibrate('menuSelect');
     }
     this.input.clearJustPressed();
@@ -846,6 +1073,200 @@ class Game {
     }
 
     return false;
+  }
+
+  _handleCareerMapClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    if (this._checkCareerMapBackClick(x, y, isPortrait, uiScale)) {
+      return;
+    }
+
+    if (this._checkCareerMapUpgradeClick(x, y, isPortrait, uiScale)) {
+      return;
+    }
+
+    if (this._checkCareerMapStageNavClick(x, y, isPortrait, uiScale, centerX)) {
+      return;
+    }
+
+    if (this._checkCareerMapEventClick(x, y, isPortrait, uiScale, centerX)) {
+      return;
+    }
+  }
+
+  _checkCareerMapBackClick(x, y, isPortrait, uiScale) {
+    const btnW = isPortrait ? 80 * uiScale : 90;
+    const btnH = isPortrait ? 36 * uiScale : 40;
+    const btnX = isPortrait ? 15 * uiScale : 20;
+    const btnY = isPortrait ? 20 * uiScale : 20;
+
+    if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+      this.state = GameState.MENU;
+      this.menuCursor = 3;
+      this._isCareerMode = false;
+      this.touchManager.vibrate('menuSelect');
+      return true;
+    }
+    return false;
+  }
+
+  _checkCareerMapUpgradeClick(x, y, isPortrait, uiScale) {
+    const btnW = isPortrait ? 100 * uiScale : 110;
+    const btnH = isPortrait ? 36 * uiScale : 40;
+    const btnX = this.canvas.width - (isPortrait ? 15 * uiScale : 20) - btnW;
+    const btnY = isPortrait ? 20 * uiScale : 20;
+
+    if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+      this._openCareerUpgrade();
+      return true;
+    }
+    return false;
+  }
+
+  _checkCareerMapStageNavClick(x, y, isPortrait, uiScale, centerX) {
+    const stages = this.career.getStages();
+    const navY = isPortrait ? 90 * uiScale : 90;
+    const navBtnSize = isPortrait ? 40 * uiScale : 45;
+    const stageTitleW = isPortrait ? 220 * uiScale : 280;
+
+    const leftBtnX = centerX - stageTitleW / 2 - navBtnSize - 10;
+    const rightBtnX = centerX + stageTitleW / 2 + 10;
+
+    if (y >= navY - navBtnSize / 2 && y <= navY + navBtnSize / 2) {
+      if (x >= leftBtnX && x <= leftBtnX + navBtnSize) {
+        this.careerStageCursor = (this.careerStageCursor - 1 + stages.length) % stages.length;
+        this.careerEventCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return true;
+      }
+      if (x >= rightBtnX && x <= rightBtnX + navBtnSize) {
+        this.careerStageCursor = (this.careerStageCursor + 1) % stages.length;
+        this.careerEventCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _checkCareerMapEventClick(x, y, isPortrait, uiScale, centerX) {
+    const stage = this.career.getStage(this.careerStageCursor);
+    if (!stage) return false;
+    if (!this.career.isStageUnlocked(this.careerStageCursor)) return false;
+
+    const listTop = isPortrait ? 160 * uiScale : 150;
+    const listBottom = isPortrait ? this.canvas.height - 120 * uiScale : this.canvas.height - 100;
+    const listW = isPortrait ? Math.min(360 * uiScale, this.canvas.width * 0.9) : 500;
+    const listX = centerX - listW / 2;
+
+    const eventCount = stage.events.length;
+    const itemGap = isPortrait ? 10 * uiScale : 12;
+    const itemH = isPortrait ? 60 * uiScale : 70;
+    const totalItemH = eventCount * itemH + (eventCount - 1) * itemGap;
+    const startY = listTop + (listBottom - listTop - totalItemH) / 2;
+
+    for (let i = 0; i < eventCount; i++) {
+      const iy = startY + i * (itemH + itemGap);
+      const event = stage.events[i];
+      const isUnlocked = this.career.isEventUnlocked(event.id);
+
+      if (x >= listX + 10 && x <= listX + listW - 10 &&
+          y >= iy && y <= iy + itemH) {
+        if (isUnlocked) {
+          this.careerEventCursor = i;
+          this.touchManager.vibrate('menuSelect');
+          this._openCareerEventDetail();
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _handleCareerEventClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    const btnH = isPortrait ? 48 * uiScale : 52;
+    const btnY = isPortrait ? this.canvas.height - 100 * uiScale : this.canvas.height - 90;
+    const totalBtnW = isPortrait ? 280 * uiScale : 320;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (totalBtnW - btnGap) / 2;
+    const btnX = centerX - totalBtnW / 2;
+
+    const cancelX = btnX;
+    const startX = btnX + btnW + btnGap;
+
+    if (y >= btnY && y <= btnY + btnH) {
+      if (x >= cancelX && x <= cancelX + btnW) {
+        this.state = GameState.CAREER_MAP;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= startX && x <= startX + btnW) {
+        this._startCareerRace();
+        return;
+      }
+    }
+  }
+
+  _handleCareerUpgradeClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    const backBtnW = isPortrait ? 80 * uiScale : 90;
+    const backBtnH = isPortrait ? 36 * uiScale : 40;
+    const backBtnX = isPortrait ? 15 * uiScale : 20;
+    const backBtnY = isPortrait ? 20 * uiScale : 20;
+
+    if (x >= backBtnX && x <= backBtnX + backBtnW &&
+        y >= backBtnY && y <= backBtnY + backBtnH) {
+      this.state = GameState.CAREER_MAP;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const listTop = isPortrait ? 100 * uiScale : 90;
+    const listBottom = isPortrait ? this.canvas.height - 80 * uiScale : this.canvas.height - 70;
+    const listW = isPortrait ? Math.min(380 * uiScale, this.canvas.width * 0.92) : 550;
+    const listX = centerX - listW / 2;
+
+    const itemCount = UpgradeTypeKeys.length;
+    const itemGap = isPortrait ? 10 * uiScale : 12;
+    const itemH = isPortrait ? 70 * uiScale : 80;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = listTop + (listBottom - listTop - totalItemH) / 2;
+
+    for (let i = 0; i < itemCount; i++) {
+      const iy = startY + i * (itemH + itemGap);
+      const upgradeId = UpgradeTypeKeys[i];
+
+      if (x >= listX + 10 && x <= listX + listW - 10 &&
+          y >= iy && y <= iy + itemH) {
+        this.careerUpgradeCursor = i;
+        this.touchManager.vibrate('menuSelect');
+
+        if (this.career.canUpgrade(upgradeId)) {
+          this.career.upgradeVehicle(upgradeId);
+          this.touchManager.vibrate('newRecord');
+        }
+        return;
+      }
+    }
   }
 
   startGame() {
@@ -1049,7 +1470,33 @@ class Game {
     if (allFinished || this.player.finished) {
       this._saveBestLapRecord();
       this._processAchievements();
-      this.state = GameState.FINISHED;
+
+      if (this._isCareerMode && this.career.selectedEventId) {
+        const rankings = this.getRankings();
+        const playerRank = rankings.find(r => r.bike.isPlayer);
+        const rank = playerRank ? playerRank.rank : rankings.length + 1;
+        const time = this.player.raceTime;
+        const bestLap = this.player.bestLapTime;
+
+        const result = this.career.processRaceResult(
+          this.career.selectedEventId,
+          rank,
+          time,
+          bestLap
+        );
+
+        this.careerRaceResultData = {
+          rank: rank,
+          time: time,
+          bestLap: bestLap,
+          coinsEarned: result.coinsEarned,
+          isNewBest: result.isNewBest
+        };
+
+        this.state = GameState.CAREER_RACE_RESULT;
+      } else {
+        this.state = GameState.FINISHED;
+      }
     }
 
     this.renderer.updateCamera(this.player, dt);
@@ -1181,6 +1628,31 @@ class Game {
 
     if (this.state === GameState.ACHIEVEMENTS) {
       this.renderer.drawAchievements(this);
+      return;
+    }
+
+    if (this.state === GameState.CAREER_MAP) {
+      this.renderer.drawCareerMap(this);
+      return;
+    }
+
+    if (this.state === GameState.CAREER_EVENT) {
+      this.renderer.drawCareerEvent(this);
+      return;
+    }
+
+    if (this.state === GameState.CAREER_UPGRADE) {
+      this.renderer.drawCareerUpgrade(this);
+      return;
+    }
+
+    if (this.state === GameState.CAREER_STAGE_CLEAR) {
+      this.renderer.drawCareerStageClear(this);
+      return;
+    }
+
+    if (this.state === GameState.CAREER_RACE_RESULT) {
+      this.renderer.drawCareerRaceResult(this);
       return;
     }
 
