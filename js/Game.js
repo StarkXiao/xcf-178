@@ -1,6 +1,7 @@
 const GameState = {
   MENU: 'menu',
   VEHICLE_SELECT: 'vehicleSelect',
+  GARAGE: 'garage',
   ACHIEVEMENTS: 'achievements',
   CAREER_MAP: 'careerMap',
   CAREER_EVENT: 'careerEvent',
@@ -170,7 +171,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 7;
+    this.menuItemCount = 8;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
@@ -178,11 +179,14 @@ class Game {
     this.achievements = new AchievementManager();
 
     this.career = new CareerManager();
+    this.garage = new GarageManager(this.career);
     this.careerStageCursor = 0;
     this.careerEventCursor = 0;
     this.careerUpgradeCursor = 0;
     this.careerRaceResultData = null;
     this._isCareerMode = false;
+    this.garageCategoryCursor = 0;
+    this.garageItemCursor = 0;
 
     this.track = null;
     this.player = null;
@@ -356,6 +360,8 @@ class Game {
           this.state = GameState.CAREER_MAP;
         }
         this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.GARAGE) {
+        this._handleGarageClick(e);
       } else if (this.state === GameState.PAUSED) {
         this._handlePauseClick(e);
       } else if (this.state === GameState.FINISHED) {
@@ -576,8 +582,9 @@ class Game {
     const itemY2 = itemY1 + itemSpacing;
     const itemY3 = itemY2 + itemSpacing;
     const itemY4 = itemY3 + itemSpacing;
-    const itemY5 = itemY4 + itemSpacing + 8 * uiScale;
-    const itemY6 = itemY5 + itemSpacing;
+    const itemY5 = itemY4 + itemSpacing;
+    const itemY6 = itemY5 + itemSpacing + 8 * uiScale;
+    const itemY7 = itemY6 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -593,18 +600,22 @@ class Game {
         this._openVehicleSelect();
       } else if (y >= itemY3 && y < itemY3 + 45) {
         this.menuCursor = 3;
-        this._openCareerMap();
+        this._openGarage();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY4 && y < itemY4 + 45) {
         this.menuCursor = 4;
-        this._openAchievements();
+        this._openCareerMap();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY5 && y < itemY5 + 45) {
         this.menuCursor = 5;
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY6 && y < itemY6 + 45) {
         this.menuCursor = 6;
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      } else if (y >= itemY7 && y < itemY7 + 45) {
+        this.menuCursor = 7;
         this.startGame();
       }
     }
@@ -647,6 +658,9 @@ class Game {
         break;
       case GameState.VEHICLE_SELECT:
         this._updateVehicleSelect();
+        break;
+      case GameState.GARAGE:
+        this._updateGarage();
         break;
       case GameState.ACHIEVEMENTS:
         this._updateAchievements();
@@ -703,20 +717,25 @@ class Game {
       }
     } else if (this.menuCursor === 3) {
       if (this.input.isMenuConfirm()) {
-        this._openCareerMap();
+        this._openGarage();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 4) {
       if (this.input.isMenuConfirm()) {
-        this._openAchievements();
+        this._openCareerMap();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 5) {
       if (this.input.isMenuConfirm()) {
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 6) {
+      if (this.input.isMenuConfirm()) {
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      }
+    } else if (this.menuCursor === 7) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -728,6 +747,13 @@ class Game {
   _openVehicleSelect() {
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.state = GameState.VEHICLE_SELECT;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _openGarage() {
+    this.garageCategoryCursor = 0;
+    this.garageItemCursor = this.garage.getSelectedIndex('engine');
+    this.state = GameState.GARAGE;
     this.touchManager.vibrate('menuSelect');
   }
 
@@ -777,8 +803,6 @@ class Game {
     this.totalLaps = laps;
     this.lapIndex = LapOptions.indexOf(laps);
     if (this.lapIndex < 0) this.lapIndex = 1;
-
-    this.career.applyUpgradesToBike(this.player, this.selectedVehicle);
 
     const touchControls = document.getElementById('touchControls');
     if (touchControls) {
@@ -963,6 +987,53 @@ class Game {
     this._saveVehicleSelection(this.selectedVehicle);
     this.state = GameState.MENU;
     this.touchManager.vibrate('menuSelect');
+  }
+
+  _updateGarage() {
+    const category = GarageCategoryKeys[this.garageCategoryCursor];
+    const itemCount = this.garage.getCategoryItemCount(category);
+
+    if (this.input.isMenuUp()) {
+      this.garageItemCursor = (this.garageItemCursor - 1 + itemCount) % itemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.garageItemCursor = (this.garageItemCursor + 1) % itemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuLeft()) {
+      this.garageCategoryCursor = (this.garageCategoryCursor - 1 + GarageCategoryKeys.length) % GarageCategoryKeys.length;
+      this.garageItemCursor = this.garage.getSelectedIndex(GarageCategoryKeys[this.garageCategoryCursor]);
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuRight()) {
+      this.garageCategoryCursor = (this.garageCategoryCursor + 1) % GarageCategoryKeys.length;
+      this.garageItemCursor = this.garage.getSelectedIndex(GarageCategoryKeys[this.garageCategoryCursor]);
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuConfirm()) {
+      const cat = GarageCategoryKeys[this.garageCategoryCursor];
+      const idx = this.garageItemCursor;
+      if (this.garage.isItemUnlocked(cat, idx)) {
+        this.garage.selectItem(cat, idx);
+        this.touchManager.vibrate('menuSelect');
+      } else if (this.garage.canBuyItem(cat, idx)) {
+        this.garage.buyItem(cat, idx);
+        this.touchManager.vibrate('newRecord');
+      } else {
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.menuCursor = 3;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    this.input.clearJustPressed();
   }
 
   _handleVehicleSelectClick(e) {
@@ -1272,6 +1343,155 @@ class Game {
     }
   }
 
+  _handleGarageClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+    const garage = this.garage;
+
+    const backBtnW = isPortrait ? 80 * uiScale : 90;
+    const backBtnH = isPortrait ? 32 * uiScale : 36;
+    const backBtnX = isPortrait ? 15 * uiScale : 20;
+    const backBtnY = isPortrait ? 20 * uiScale : 20;
+
+    if (x >= backBtnX && x <= backBtnX + backBtnW &&
+        y >= backBtnY && y <= backBtnY + backBtnH) {
+      this.state = GameState.MENU;
+      this.menuCursor = 3;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const categoryY = isPortrait ? 55 * uiScale : 65;
+    const categoryCount = GarageCategoryKeys.length;
+    const categoryTabW = isPortrait ? (this.canvas.width * 0.9) / categoryCount : 120;
+    const categoryTabH = isPortrait ? 32 * uiScale : 38;
+    const categoryTotalW = categoryTabW * categoryCount;
+    const categoryStartX = centerX - categoryTotalW / 2;
+
+    for (let i = 0; i < categoryCount; i++) {
+      const tabX = categoryStartX + i * categoryTabW;
+      if (x >= tabX + 2 && x <= tabX + categoryTabW - 2 &&
+          y >= categoryY && y <= categoryY + categoryTabH) {
+        this.garageCategoryCursor = i;
+        this.garageItemCursor = garage.getSelectedIndex(GarageCategoryKeys[i]);
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    const contentY = categoryY + categoryTabH + (isPortrait ? 10 * uiScale : 15);
+    const category = GarageCategoryKeys[this.garageCategoryCursor];
+    const itemCount = garage.getCategoryItemCount(category);
+
+    let listX, listY, listW, listH;
+    let previewX, previewY, previewW, previewH;
+
+    if (isPortrait) {
+      const panelW = Math.min(360 * uiScale, this.canvas.width * 0.92);
+      const panelX = centerX - panelW / 2;
+      const previewHP = 220 * uiScale;
+      const raceHP = 90 * uiScale;
+
+      previewX = panelX;
+      previewY = contentY;
+      previewW = panelW;
+      previewH = previewHP;
+
+      listX = panelX;
+      listY = contentY + previewHP + 6 * uiScale;
+      listW = panelW;
+      listH = this.canvas.height - contentY - previewHP - raceHP - 30 * uiScale;
+    } else {
+      const leftPanelX = 40;
+      const leftPanelW = 340;
+      const leftPanelH = this.canvas.height - contentY - 50;
+
+      const rightPanelX = leftPanelX + leftPanelW + 20;
+      const rightPanelW = this.canvas.width - rightPanelX - 40;
+      const rightPanelH = this.canvas.height - contentY - 50;
+      const previewHR = rightPanelH - 130;
+
+      listX = leftPanelX;
+      listY = contentY;
+      listW = leftPanelW;
+      listH = leftPanelH;
+
+      previewX = rightPanelX;
+      previewY = contentY;
+      previewW = rightPanelW;
+      previewH = previewHR;
+    }
+
+    const listTop = listY + 40 * uiScale;
+    const listBottom = listY + listH - 15 * uiScale;
+    const listAreaH = listBottom - listTop;
+
+    const itemGap = isPortrait ? 6 * uiScale : 8;
+    const itemH = isPortrait ? 50 * uiScale : 56;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = listTop + Math.max(0, (listAreaH - totalItemH) / 2);
+
+    for (let i = 0; i < itemCount; i++) {
+      const iy = startY + i * (itemH + itemGap);
+      const itemAreaX = listX + 8 * uiScale;
+      const itemAreaW = listW - 16 * uiScale;
+
+      if (x >= itemAreaX && x <= itemAreaX + itemAreaW &&
+          y >= iy && y <= iy + itemH) {
+        this.garageItemCursor = i;
+        const cat = GarageCategoryKeys[this.garageCategoryCursor];
+        const idx = this.garageItemCursor;
+
+        if (garage.isItemUnlocked(cat, idx)) {
+          garage.selectItem(cat, idx);
+          this.touchManager.vibrate('menuSelect');
+        } else if (garage.canBuyItem(cat, idx)) {
+          garage.buyItem(cat, idx);
+          this.touchManager.vibrate('newRecord');
+        } else {
+          this.touchManager.vibrate('menuSelect');
+        }
+        return;
+      }
+    }
+
+    const currentItem = garage.getItemByIndex(category, this.garageItemCursor);
+    const isUnlocked = garage.isItemUnlocked(category, this.garageItemCursor);
+    const canBuy = garage.canBuyItem(category, this.garageItemCursor);
+    const isSelected = this.garageItemCursor === garage.getSelectedIndex(category);
+
+    let btnX, btnY, btnW, btnH;
+    if (isPortrait) {
+      btnW = 160 * uiScale;
+      btnH = 30 * uiScale;
+      btnX = previewX + previewW / 2 - btnW / 2;
+      btnY = previewY + previewH - 38 * uiScale;
+    } else {
+      btnW = 200;
+      btnH = 40;
+      btnX = previewX + previewW / 2 - btnW / 2;
+      btnY = previewY + previewH - 50;
+    }
+
+    if (x >= btnX && x <= btnX + btnW &&
+        y >= btnY && y <= btnY + btnH) {
+      const cat = GarageCategoryKeys[this.garageCategoryCursor];
+      const idx = this.garageItemCursor;
+
+      if (isUnlocked && !isSelected) {
+        garage.selectItem(cat, idx);
+        this.touchManager.vibrate('menuSelect');
+      } else if (canBuy) {
+        garage.buyItem(cat, idx);
+        this.touchManager.vibrate('newRecord');
+      }
+    }
+  }
+
   startGame() {
     this._applySettings();
     this._resetRace();
@@ -1307,6 +1527,7 @@ class Game {
     );
     this.player.color = vehicle.color;
     this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
+    this.garage.applyUpgradesToBike(this.player, this.selectedVehicle);
     this.collision.damageMultiplier = cfg.collisionDamage;
 
     this.aiBikes = [];
@@ -1474,25 +1695,35 @@ class Game {
       this._saveBestLapRecord();
       this._processAchievements();
 
+      const rankings = this.getRankings();
+      const playerRanking = rankings.find(r => r.bike.isPlayer);
+      const finalRank = playerRanking ? playerRanking.rank : rankings.length + 1;
+      const finalTime = this.player.raceTime;
+      const finalBestLap = this.player.bestLapTime;
+
+      this.garage.addRaceResult({
+        rank: finalRank,
+        time: finalTime,
+        bestLap: finalBestLap,
+        totalLaps: this.totalLaps,
+        difficulty: this.difficulty,
+        vehicleType: this.selectedVehicle
+      });
+
       if (this._isCareerMode && this.career.selectedEventId) {
-        const rankings = this.getRankings();
-        const playerRank = rankings.find(r => r.bike.isPlayer);
-        const rank = playerRank ? playerRank.rank : rankings.length + 1;
-        const time = this.player.raceTime;
-        const bestLap = this.player.bestLapTime;
 
         const result = this.career.processRaceResult(
           this.career.selectedEventId,
-          rank,
-          time,
-          bestLap,
+          finalRank,
+          finalTime,
+          finalBestLap,
           this.totalLaps
         );
 
         this.careerRaceResultData = {
-          rank: rank,
-          time: time,
-          bestLap: bestLap,
+          rank: finalRank,
+          time: finalTime,
+          bestLap: finalBestLap,
           coinsEarned: result.coinsEarned,
           isNewBest: result.isNewBest,
           totalLaps: this.totalLaps,
@@ -1629,6 +1860,11 @@ class Game {
 
     if (this.state === GameState.VEHICLE_SELECT) {
       this.renderer.drawVehicleSelect(this);
+      return;
+    }
+
+    if (this.state === GameState.GARAGE) {
+      this.renderer.drawGarage(this);
       return;
     }
 

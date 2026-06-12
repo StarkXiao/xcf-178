@@ -645,9 +645,18 @@ class Renderer {
     }
 
     ctx.shadowBlur = bike.nitroActive ? 30 : 15;
-    ctx.shadowColor = bike.nitroActive ? '#00ffff' : bike.color;
 
-    ctx.fillStyle = bike.color;
+    let bodyColor = bike.color;
+    let bodyShadowColor = bike.color;
+
+    if (bike.paintSpecial === 'rainbow') {
+      const hue = (Date.now() * 0.15) % 360;
+      bodyColor = `hsl(${hue}, 100%, 60%)`;
+      bodyShadowColor = `hsl(${hue}, 100%, 55%)`;
+    }
+
+    ctx.shadowColor = bike.nitroActive ? '#00ffff' : bodyShadowColor;
+    ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.moveTo(wheelBase * 0.6, 0);
     ctx.lineTo(wheelBase * 0.2, -halfWidth);
@@ -685,6 +694,10 @@ class Renderer {
         gradient.addColorStop(0.15, '#00ffff');
         gradient.addColorStop(0.4, '#00f5ff');
         gradient.addColorStop(0.7, 'rgba(0, 245, 255, 0.4)');
+        gradient.addColorStop(1, 'transparent');
+      } else if (bike.paintSpecial === 'rainbow') {
+        const tailHue = (Date.now() * 0.15) % 360;
+        gradient.addColorStop(0, `hsl(${tailHue}, 100%, 65%)`);
         gradient.addColorStop(1, 'transparent');
       } else {
         gradient.addColorStop(0, bike.color);
@@ -2130,11 +2143,20 @@ class Renderer {
     ctx.save();
     ctx.translate(x, y);
 
+    let previewColor = vehicle.color;
+    let previewShadowColor = vehicle.color;
+
+    if (vehicle.paintSpecial === 'rainbow') {
+      const hue = (Date.now() * 0.15) % 360;
+      previewColor = `hsl(${hue}, 100%, 60%)`;
+      previewShadowColor = `hsl(${hue}, 100%, 55%)`;
+    }
+
     if (isSelected) {
       const pulse = Math.sin(Date.now() * 0.004) * 0.3 + 0.7;
       ctx.shadowBlur = 20 * scale;
-      ctx.shadowColor = vehicle.color;
-      ctx.strokeStyle = vehicle.color;
+      ctx.shadowColor = previewColor;
+      ctx.strokeStyle = previewColor;
       ctx.lineWidth = 2 * scale;
       ctx.globalAlpha = pulse * 0.5;
       ctx.beginPath();
@@ -2145,9 +2167,9 @@ class Renderer {
     }
 
     ctx.shadowBlur = isSelected ? 18 : 8;
-    ctx.shadowColor = vehicle.color;
+    ctx.shadowColor = previewShadowColor;
 
-    ctx.fillStyle = vehicle.color;
+    ctx.fillStyle = previewColor;
     ctx.beginPath();
     ctx.moveTo(wheelBase * 0.6, 0);
     ctx.lineTo(wheelBase * 0.2, -halfWidth);
@@ -2577,7 +2599,9 @@ class Renderer {
     const achievementHeight = (game.achievements._newlyUnlocked && game.achievements._newlyUnlocked.length > 0)
       ? 55 + game.achievements._newlyUnlocked.length * 28
       : 0;
-    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight;
+    const rewardHeight = game.quickRaceReward && game.quickRaceReward.coinsEarned > 0 ? 70 : 0;
+    const configHeight = 55;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -2785,6 +2809,63 @@ class Renderer {
     ctx.stroke();
     infoY += 20;
 
+    if (game.quickRaceReward && game.quickRaceReward.coinsEarned > 0) {
+      const coinsPulse = Math.sin(Date.now() * 0.006) * 0.2 + 1;
+      ctx.save();
+      ctx.translate(this.width / 2, infoY + 20);
+      ctx.scale(coinsPulse, coinsPulse);
+
+      const coinGrad = ctx.createLinearGradient(-120, -15, 120, 15);
+      coinGrad.addColorStop(0, 'rgba(255, 215, 0, 0.1)');
+      coinGrad.addColorStop(0.5, 'rgba(255, 215, 0, 0.25)');
+      coinGrad.addColorStop(1, 'rgba(255, 215, 0, 0.1)');
+      ctx.fillStyle = coinGrad;
+      ctx.beginPath();
+      ctx.roundRect(-130, -22, 260, 44, 8);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#ffd700';
+      ctx.beginPath();
+      ctx.roundRect(-130, -22, 260, 44, 8);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffd700';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#ffd700';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`🏆 比赛奖励 +${game.quickRaceReward.coinsEarned} 💰`, 0, 5);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      infoY += 70;
+
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 20;
+    }
+
+    const config = game.garage.getCurrentConfig();
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`改装配置: ${config.engineName} · ${config.tireName} · ${config.paintName} · ${config.driftName}`, this.width / 2, infoY + 15);
+    infoY += 35;
+
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 30, infoY);
+    ctx.lineTo(panelX + panelWidth - 30, infoY);
+    ctx.stroke();
+    infoY += 20;
+
     const obsStats = game.collision.getObstacleStatistics();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px monospace';
@@ -2899,6 +2980,1089 @@ class Renderer {
     ctx.shadowBlur = 0;
 
     ctx.restore();
+  }
+
+  drawGarage(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const garage = game.garage;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const bgGrad = ctx.createRadialGradient(
+      this.width * 0.3, this.height * 0.4, 0,
+      this.width * 0.3, this.height * 0.4, this.width * 0.6
+    );
+    bgGrad.addColorStop(0, 'rgba(255, 0, 255, 0.05)');
+    bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const titleY = isPortrait ? 28 * uiScale : 35;
+    const titleSize = isPortrait ? 24 * uiScale : 30;
+    const subtitleSize = isPortrait ? 11 * uiScale : 13;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('改装车库', centerX, titleY);
+    ctx.shadowBlur = 0;
+
+    const coins = game.career.coins;
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ffff00';
+    ctx.font = `bold ${subtitleSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`💰 ${coins}`, this.width - (isPortrait ? 15 * uiScale : 20), titleY + 5);
+    ctx.shadowBlur = 0;
+
+    const categoryY = isPortrait ? 55 * uiScale : 65;
+    const categoryCount = GarageCategoryKeys.length;
+    const categoryTabW = isPortrait ? (this.width * 0.9) / categoryCount : 120;
+    const categoryTabH = isPortrait ? 32 * uiScale : 38;
+    const categoryTotalW = categoryTabW * categoryCount;
+    const categoryStartX = centerX - categoryTotalW / 2;
+
+    const categoryNames = {
+      engine: '引擎',
+      tire: '轮胎',
+      paint: '喷漆',
+      drift: '漂移'
+    };
+
+    const categoryColors = {
+      engine: '#ff6600',
+      tire: '#00ff66',
+      paint: '#ff00ff',
+      drift: '#00f5ff'
+    };
+
+    GarageCategoryKeys.forEach((cat, idx) => {
+      const tabX = categoryStartX + idx * categoryTabW;
+      const isSelected = idx === game.garageCategoryCursor;
+      const color = categoryColors[cat];
+
+      ctx.fillStyle = isSelected ? 'rgba(0, 0, 0, 0.6)' : 'rgba(30, 30, 50, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(tabX + 2, categoryY, categoryTabW - 4, categoryTabH, 6 * uiScale);
+      ctx.fill();
+
+      if (isSelected) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = color;
+        ctx.beginPath();
+        ctx.roundRect(tabX + 2, categoryY, categoryTabW - 4, categoryTabH, 6 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.fillStyle = isSelected ? color : '#888';
+      ctx.shadowBlur = isSelected ? 6 : 0;
+      ctx.shadowColor = color;
+      ctx.font = `bold ${isPortrait ? 12 * uiScale : 14}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(categoryNames[cat], tabX + categoryTabW / 2, categoryY + categoryTabH * 0.65);
+      ctx.shadowBlur = 0;
+    });
+
+    if (isPortrait) {
+      this._drawGaragePortrait(game, garage, uiScale, centerX, categoryY + categoryTabH + 10 * uiScale);
+    } else {
+      this._drawGarageLandscape(game, garage, uiScale, centerX, categoryY + categoryTabH + 15);
+    }
+
+    const backBtnW = isPortrait ? 80 * uiScale : 90;
+    const backBtnH = isPortrait ? 32 * uiScale : 36;
+    const backBtnX = isPortrait ? 15 * uiScale : 20;
+    const backBtnY = isPortrait ? 20 * uiScale : 20;
+
+    ctx.fillStyle = 'rgba(40, 40, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(backBtnX, backBtnY, backBtnW, backBtnH, 6 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(backBtnX, backBtnY, backBtnW, backBtnH, 6 * uiScale);
+    ctx.stroke();
+    ctx.fillStyle = '#aaa';
+    ctx.font = `bold ${isPortrait ? 12 * uiScale : 13}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('← 返回', backBtnX + backBtnW / 2, backBtnY + backBtnH * 0.68);
+
+    const hintSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('←→ 切换分类  ↑↓ 选择部件  空格 购买/装备  ESC 返回', centerX, this.height - (isPortrait ? 10 * uiScale : 15));
+
+    ctx.restore();
+  }
+
+  _drawGarageLandscape(game, garage, uiScale, centerX, contentY) {
+    const ctx = this.ctx;
+    const category = GarageCategoryKeys[game.garageCategoryCursor];
+    const itemCount = garage.getCategoryItemCount(category);
+    const selectedVehicle = VehicleTypes[game.selectedVehicle];
+    const perfStats = garage.calculatePerformanceStats(game.selectedVehicle);
+
+    const leftPanelX = 40;
+    const leftPanelW = 340;
+    const leftPanelH = this.height - contentY - 50;
+
+    const rightPanelX = leftPanelX + leftPanelW + 20;
+    const rightPanelW = this.width - rightPanelX - 40;
+    const rightPanelH = this.height - contentY - 50;
+    const previewH = rightPanelH - 130;
+
+    this._drawGarageItemList(leftPanelX, contentY, leftPanelW, leftPanelH, game, garage, category, false);
+    this._drawGaragePreview(rightPanelX, contentY, rightPanelW, previewH, game, garage, selectedVehicle, perfStats, false);
+    this._drawGarageRacePerformance(rightPanelX, contentY + previewH + 10, rightPanelW, 115, garage, uiScale, false);
+  }
+
+  _drawGaragePortrait(game, garage, uiScale, centerX, contentY) {
+    const ctx = this.ctx;
+    const category = GarageCategoryKeys[game.garageCategoryCursor];
+    const selectedVehicle = VehicleTypes[game.selectedVehicle];
+    const perfStats = garage.calculatePerformanceStats(game.selectedVehicle);
+
+    const panelW = Math.min(360 * uiScale, this.width * 0.92);
+    const panelX = centerX - panelW / 2;
+
+    const previewH = 220 * uiScale;
+    const raceH = 90 * uiScale;
+    const listH = this.height - contentY - previewH - raceH - 30 * uiScale;
+
+    this._drawGaragePreview(panelX, contentY, panelW, previewH, game, garage, selectedVehicle, perfStats, true);
+    this._drawGarageItemList(panelX, contentY + previewH + 6 * uiScale, panelW, listH, game, garage, category, true);
+    this._drawGarageRacePerformance(panelX, contentY + previewH + listH + 12 * uiScale, panelW, raceH, garage, uiScale, true);
+  }
+
+  _drawGaragePreview(x, y, w, h, game, garage, vehicle, perfStats, isPortrait) {
+    const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const category = GarageCategoryKeys[game.garageCategoryCursor];
+    const currentItem = garage.getItemByIndex(category, game.garageItemCursor);
+    const isUnlocked = garage.isItemUnlocked(category, game.garageItemCursor);
+    const canBuy = garage.canBuyItem(category, game.garageItemCursor);
+    const isSelected = game.garageItemCursor === garage.getSelectedIndex(category);
+    const needsComparison = !isSelected && category !== 'paint';
+
+    const accentColor = category === 'engine' ? '#ff6600' :
+                       category === 'tire' ? '#00ff66' :
+                       category === 'paint' ? '#ff00ff' : '#00f5ff';
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = accentColor + '40';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10 * uiScale);
+    ctx.stroke();
+
+    if (isPortrait) {
+      const previewSize = Math.min(w * 0.28, h * 0.3);
+      const previewX = x + w * 0.18;
+      const previewY = y + h * 0.18;
+      const scale = previewSize / 50;
+
+      const previewVehicle = { ...vehicle };
+      if (category === 'paint' && currentItem) {
+        previewVehicle.color = currentItem.color;
+        previewVehicle.accentColor = currentItem.accentColor;
+        previewVehicle.paintSpecial = currentItem.special || null;
+      } else {
+        const currentPaint = garage.getCurrentPaint();
+        previewVehicle.color = currentPaint.color;
+        previewVehicle.accentColor = currentPaint.accentColor;
+        previewVehicle.paintSpecial = currentPaint.special || null;
+      }
+
+      this._drawVehiclePreview(previewX, previewY, previewVehicle, scale, true);
+
+      const nameSize = 15 * uiScale;
+      const nameX = x + w * 0.5;
+      const nameY = y + h * 0.18;
+      ctx.fillStyle = accentColor;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = accentColor;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(currentItem.name, nameX, nameY);
+      ctx.shadowBlur = 0;
+
+      const descSize = 9 * uiScale;
+      ctx.fillStyle = '#888';
+      ctx.font = `${descSize}px monospace`;
+      ctx.fillText(currentItem.description || '', nameX, nameY + 16 * uiScale);
+
+      if (currentItem.cost > 0 && !isUnlocked) {
+        ctx.fillStyle = canBuy ? '#ffff00' : '#ff4444';
+        ctx.font = `bold ${descSize}px monospace`;
+        ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 30 * uiScale);
+      }
+
+      const statsY = y + h * 0.32;
+      const statsH = h * 0.22;
+
+      if (needsComparison) {
+        const previewStats = garage.calculatePreviewStats(game.selectedVehicle, category, game.garageItemCursor);
+        if (previewStats) {
+          this._drawGarageStatsComparison(x + 10, statsY, w - 20, statsH, perfStats, previewStats, accentColor, uiScale, true);
+        }
+      } else {
+        this._drawGarageStatsBar(x + 10, statsY, w - 20, statsH, perfStats, accentColor, uiScale, true);
+      }
+
+      const detailY = statsY + statsH + 6 * uiScale;
+      const detailH = h * 0.25;
+      this._drawGarageCategoryDetails(x + 10, detailY, w - 20, detailH, category, game.garageItemCursor, garage, accentColor, uiScale, true);
+
+      this._drawGarageActionButton(x + w / 2 - 80 * uiScale, y + h - 38 * uiScale, 160 * uiScale, 30 * uiScale, game, garage, category, currentItem, isUnlocked, canBuy, isSelected, accentColor, uiScale);
+    } else {
+      const previewSize = Math.min(w * 0.2, h * 0.25);
+      const previewX = x + w * 0.15;
+      const previewY = y + h * 0.15;
+      const scale = previewSize / 50;
+
+      const previewVehicle = { ...vehicle };
+      if (category === 'paint' && currentItem) {
+        previewVehicle.color = currentItem.color;
+        previewVehicle.accentColor = currentItem.accentColor;
+        previewVehicle.paintSpecial = currentItem.special || null;
+      } else {
+        const currentPaint = garage.getCurrentPaint();
+        previewVehicle.color = currentPaint.color;
+        previewVehicle.accentColor = currentPaint.accentColor;
+        previewVehicle.paintSpecial = currentPaint.special || null;
+      }
+
+      this._drawVehiclePreview(previewX, previewY, previewVehicle, scale, true);
+
+      const nameSize = 20;
+      const nameX = x + w * 0.35;
+      const nameY = y + 38;
+      ctx.fillStyle = accentColor;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = accentColor;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(currentItem.name, nameX, nameY);
+      ctx.shadowBlur = 0;
+
+      const descSize = 12;
+      ctx.fillStyle = '#888';
+      ctx.font = `${descSize}px monospace`;
+      ctx.fillText(currentItem.description || '', nameX, nameY + 22);
+
+      if (currentItem.cost > 0 && !isUnlocked) {
+        ctx.fillStyle = canBuy ? '#ffff00' : '#ff4444';
+        ctx.font = `bold ${descSize}px monospace`;
+        ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 42);
+      }
+
+      if (isSelected && isUnlocked) {
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${descSize - 1}px monospace`;
+        ctx.fillText('✓ 已装备', nameX + 80, nameY + 42);
+      }
+
+      const statsY = y + h * 0.3;
+      const statsH = h * 0.2;
+
+      if (needsComparison) {
+        const previewStats = garage.calculatePreviewStats(game.selectedVehicle, category, game.garageItemCursor);
+        if (previewStats) {
+          this._drawGarageStatsComparison(x + 20, statsY, w - 40, statsH, perfStats, previewStats, accentColor, uiScale, false);
+        }
+      } else {
+        this._drawGarageStatsBar(x + 20, statsY, w - 40, statsH, perfStats, accentColor, uiScale, false);
+      }
+
+      const detailY = statsY + statsH + 8;
+      const detailH = h * 0.25;
+      this._drawGarageCategoryDetails(x + 20, detailY, w - 40, detailH, category, game.garageItemCursor, garage, accentColor, uiScale, false);
+
+      this._drawGarageActionButton(x + w / 2 - 100, y + h - 50, 200, 40, game, garage, category, currentItem, isUnlocked, canBuy, isSelected, accentColor, 1);
+    }
+  }
+
+  _drawGarageStatsBar(x, y, w, h, stats, accentColor, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const statLabels = ['最高速度', '加速能力', '转向操控', '漂移性能', '氮气容量'];
+    const statKeys = ['speedRating', 'accelRating', 'handlingRating', 'driftRating', 'nitroRating'];
+    const statValues = [
+      `${Math.round(stats.maxSpeed * 3.6 / 5)} km/h`,
+      `${stats.acceleration.toFixed(0)}`,
+      `${stats.steerSpeed.toFixed(2)}`,
+      `${(stats.driftAngle * 100).toFixed(0)}°`,
+      `${stats.nitroCapacity.toFixed(0)}`
+    ];
+
+    const count = statKeys.length;
+    const barH = isPortrait ? 8 * uiScale : 10;
+    const spacing = (h - 50) / count;
+    const labelSize = isPortrait ? 9 * uiScale : 11;
+    const valueSize = isPortrait ? 9 * uiScale : 11;
+
+    statKeys.forEach((key, i) => {
+      const sy = y + i * spacing + spacing * 0.3;
+      const value = stats[key];
+      const barY = sy + labelSize + 4;
+
+      ctx.fillStyle = '#999';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(statLabels[i], x, sy);
+
+      ctx.fillStyle = accentColor;
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(statValues[i], x + w, sy);
+
+      ctx.fillStyle = 'rgba(30, 30, 60, 0.8)';
+      ctx.beginPath();
+      ctx.roundRect(x, barY, w, barH, 3 * uiScale);
+      ctx.fill();
+
+      const fillW = w * (value / 5);
+      const statGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+      statGrad.addColorStop(0, accentColor);
+      statGrad.addColorStop(1, accentColor + '80');
+      ctx.fillStyle = statGrad;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = accentColor;
+      ctx.beginPath();
+      ctx.roundRect(x, barY, fillW, barH, 3 * uiScale);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    const tireY = y + count * spacing + 20;
+    const indicatorW = (w - 8) / 2;
+    const gripRatio = Math.min(1, (stats.tireGrip - 0.7) / 0.75);
+    const penaltyRatio = Math.min(1, stats.offTrackPenalty / 1.5);
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('轮胎抓地', x, tireY);
+    ctx.textAlign = 'right';
+    ctx.fillText(stats.tireGrip.toFixed(2), x + indicatorW - 4, tireY);
+
+    ctx.fillStyle = 'rgba(30, 30, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(x, tireY + 4, indicatorW, barH, 3 * uiScale);
+    ctx.fill();
+
+    const gripGrad = ctx.createLinearGradient(x, 0, x + indicatorW, 0);
+    gripGrad.addColorStop(0, '#00ff66');
+    gripGrad.addColorStop(1, '#00ff6680');
+    ctx.fillStyle = gripGrad;
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = '#00ff66';
+    ctx.beginPath();
+    ctx.roundRect(x, tireY + 4, indicatorW * gripRatio, barH, 3 * uiScale);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.textAlign = 'left';
+    ctx.fillText('离道惩罚', x + indicatorW + 8, tireY);
+    ctx.textAlign = 'right';
+    const penaltyColor = stats.offTrackPenalty > 1.1 ? '#ff4444' : stats.offTrackPenalty < 0.8 ? '#00ff66' : '#ffff00';
+    ctx.fillStyle = penaltyColor;
+    ctx.fillText(stats.offTrackPenalty.toFixed(2), x + w, tireY);
+
+    ctx.fillStyle = 'rgba(30, 30, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(x + indicatorW + 8, tireY + 4, indicatorW, barH, 3 * uiScale);
+    ctx.fill();
+
+    const penaltyGrad = ctx.createLinearGradient(x + indicatorW + 8, 0, x + w, 0);
+    penaltyGrad.addColorStop(0, penaltyColor);
+    penaltyGrad.addColorStop(1, penaltyColor + '80');
+    ctx.fillStyle = penaltyGrad;
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = penaltyColor;
+    ctx.beginPath();
+    ctx.roundRect(x + indicatorW + 8, tireY + 4, indicatorW * penaltyRatio, barH, 3 * uiScale);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  _drawGarageStatsComparison(x, y, w, h, currentStats, previewStats, accentColor, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const statLabels = ['最高速度', '加速能力', '转向操控', '漂移性能', '氮气容量'];
+    const statKeys = ['speedRating', 'accelRating', 'handlingRating', 'driftRating', 'nitroRating'];
+    const currentValues = [
+      `${Math.round(currentStats.maxSpeed * 3.6 / 5)}`,
+      `${currentStats.acceleration.toFixed(0)}`,
+      `${currentStats.steerSpeed.toFixed(2)}`,
+      `${(currentStats.driftAngle * 100).toFixed(0)}°`,
+      `${currentStats.nitroCapacity.toFixed(0)}`
+    ];
+    const previewValues = [
+      `${Math.round(previewStats.maxSpeed * 3.6 / 5)}`,
+      `${previewStats.acceleration.toFixed(0)}`,
+      `${previewStats.steerSpeed.toFixed(2)}`,
+      `${(previewStats.driftAngle * 100).toFixed(0)}°`,
+      `${previewStats.nitroCapacity.toFixed(0)}`
+    ];
+
+    const count = statKeys.length;
+    const barH = isPortrait ? 7 * uiScale : 9;
+    const spacing = (h - 50) / count;
+    const labelSize = isPortrait ? 8 * uiScale : 10;
+    const valueSize = isPortrait ? 8 * uiScale : 10;
+    const deltaSize = isPortrait ? 9 * uiScale : 11;
+
+    statKeys.forEach((key, i) => {
+      const sy = y + i * spacing + spacing * 0.25;
+      const currentVal = currentStats[key];
+      const previewVal = previewStats[key];
+      const delta = previewVal - currentVal;
+      const barY = sy + labelSize + 3;
+
+      ctx.fillStyle = '#777';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(statLabels[i], x, sy);
+
+      ctx.fillStyle = '#666';
+      ctx.font = `${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(currentValues[i], x + w * 0.38, sy);
+
+      ctx.fillStyle = accentColor;
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.fillText(previewValues[i], x + w * 0.68, sy);
+
+      if (delta !== 0) {
+        const deltaColor = delta > 0 ? '#00ff66' : '#ff4444';
+        const deltaSign = delta > 0 ? '▲' : '▼';
+        ctx.fillStyle = deltaColor;
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = deltaColor;
+        ctx.font = `bold ${deltaSize}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`${deltaSign}${Math.abs(delta)}`, x + w, sy);
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.fillStyle = 'rgba(30, 30, 60, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(x, barY, w, barH, 2 * uiScale);
+      ctx.fill();
+
+      const currentFillW = w * (currentVal / 5);
+      ctx.fillStyle = 'rgba(100, 100, 150, 0.4)';
+      ctx.beginPath();
+      ctx.roundRect(x, barY, currentFillW, barH, 2 * uiScale);
+      ctx.fill();
+
+      const previewFillW = w * (previewVal / 5);
+      const barGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+      barGrad.addColorStop(0, accentColor);
+      barGrad.addColorStop(1, accentColor + '60');
+      ctx.fillStyle = barGrad;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.roundRect(x, barY, previewFillW, barH, 2 * uiScale);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    const tireY = y + count * spacing + 20;
+    const indicatorW = (w - 8) / 2;
+
+    ctx.fillStyle = '#777';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('轮胎抓地', x, tireY);
+
+    const gripDelta = previewStats.tireGrip - currentStats.tireGrip;
+    const gripDeltaColor = gripDelta > 0.01 ? '#00ff66' : gripDelta < -0.01 ? '#ff4444' : '#888';
+    const gripDeltaSign = gripDelta > 0.01 ? '▲' : gripDelta < -0.01 ? '▼' : '=';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText(currentStats.tireGrip.toFixed(2), x + indicatorW - 22, tireY);
+    ctx.fillStyle = accentColor;
+    ctx.fillText(previewStats.tireGrip.toFixed(2), x + indicatorW - 4, tireY);
+    if (gripDeltaSign !== '=') {
+      ctx.fillStyle = gripDeltaColor;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = gripDeltaColor;
+      ctx.font = `bold ${deltaSize}px monospace`;
+      ctx.fillText(`${gripDeltaSign}${Math.abs(gripDelta).toFixed(2)}`, x + indicatorW + 4, tireY);
+      ctx.shadowBlur = 0;
+    }
+
+    const gripBarY = tireY + labelSize + 3;
+    ctx.fillStyle = 'rgba(30, 30, 60, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, gripBarY, indicatorW, barH, 2 * uiScale);
+    ctx.fill();
+    const curGripW = indicatorW * Math.min(1, (currentStats.tireGrip - 0.7) / 0.75);
+    const prevGripW = indicatorW * Math.min(1, (previewStats.tireGrip - 0.7) / 0.75);
+    ctx.fillStyle = 'rgba(100, 150, 100, 0.4)';
+    ctx.beginPath();
+    ctx.roundRect(x, gripBarY, curGripW, barH, 2 * uiScale);
+    ctx.fill();
+    const gripGrad = ctx.createLinearGradient(x, 0, x + indicatorW, 0);
+    gripGrad.addColorStop(0, '#00ff66');
+    gripGrad.addColorStop(1, '#00ff6660');
+    ctx.fillStyle = gripGrad;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.roundRect(x, gripBarY, prevGripW, barH, 2 * uiScale);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#777';
+    ctx.font = `${labelSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('离道惩罚', x + indicatorW + 8, tireY);
+
+    const penaltyDelta = previewStats.offTrackPenalty - currentStats.offTrackPenalty;
+    const penaltyDeltaColor = penaltyDelta < -0.01 ? '#00ff66' : penaltyDelta > 0.01 ? '#ff4444' : '#888';
+    const penaltyDeltaSign = penaltyDelta < -0.01 ? '▲' : penaltyDelta > 0.01 ? '▼' : '=';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText(currentStats.offTrackPenalty.toFixed(2), x + w - 22, tireY);
+    const previewPenaltyColor = previewStats.offTrackPenalty > 1.1 ? '#ff4444' : previewStats.offTrackPenalty < 0.8 ? '#00ff66' : '#ffff00';
+    ctx.fillStyle = previewPenaltyColor;
+    ctx.fillText(previewStats.offTrackPenalty.toFixed(2), x + w - 4, tireY);
+    if (penaltyDeltaSign !== '=') {
+      ctx.fillStyle = penaltyDeltaColor;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = penaltyDeltaColor;
+      ctx.font = `bold ${deltaSize}px monospace`;
+      ctx.fillText(`${penaltyDeltaSign}${Math.abs(penaltyDelta).toFixed(2)}`, x + w + 4, tireY);
+      ctx.shadowBlur = 0;
+    }
+
+    const penaltyBarY = gripBarY;
+    ctx.fillStyle = 'rgba(30, 30, 60, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x + indicatorW + 8, penaltyBarY, indicatorW, barH, 2 * uiScale);
+    ctx.fill();
+    const curPenaltyW = indicatorW * Math.min(1, currentStats.offTrackPenalty / 1.5);
+    const prevPenaltyW = indicatorW * Math.min(1, previewStats.offTrackPenalty / 1.5);
+    ctx.fillStyle = 'rgba(150, 100, 100, 0.4)';
+    ctx.beginPath();
+    ctx.roundRect(x + indicatorW + 8, penaltyBarY, curPenaltyW, barH, 2 * uiScale);
+    ctx.fill();
+    const penaltyGrad = ctx.createLinearGradient(x + indicatorW + 8, 0, x + w, 0);
+    penaltyGrad.addColorStop(0, previewPenaltyColor);
+    penaltyGrad.addColorStop(1, previewPenaltyColor + '60');
+    ctx.fillStyle = penaltyGrad;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.roundRect(x + indicatorW + 8, penaltyBarY, prevPenaltyW, barH, 2 * uiScale);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  _drawGarageCategoryDetails(x, y, w, h, category, itemIndex, garage, accentColor, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const details = garage.getCategoryDetailStats(category, itemIndex);
+    if (!details || !details.primary) return;
+
+    const isUnlocked = garage.isItemUnlocked(category, itemIndex);
+    const statCount = details.primary.length;
+    const spacing = Math.min(h / statCount, isPortrait ? 22 * uiScale : 26);
+    const labelSize = isPortrait ? 9 * uiScale : 10;
+    const valueSize = isPortrait ? 10 * uiScale : 12;
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = accentColor + '30';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * uiScale);
+    ctx.stroke();
+
+    const titleSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = accentColor + '99';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('详细参数', x + 8 * uiScale, y + 14 * uiScale);
+
+    const contentStartY = y + 20 * uiScale;
+    details.primary.forEach((stat, i) => {
+      const sy = contentStartY + i * spacing;
+
+      if (stat.isColor) {
+        ctx.fillStyle = '#888';
+        ctx.font = `${labelSize}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText(stat.label, x + 8 * uiScale, sy);
+
+        const swatchSize = isPortrait ? 12 * uiScale : 14;
+        const swatchX = x + w - 8 * uiScale - swatchSize;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = stat.value;
+        ctx.fillStyle = stat.value;
+        ctx.beginPath();
+        ctx.arc(swatchX + swatchSize / 2, sy - swatchSize / 3, swatchSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff40';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(swatchX + swatchSize / 2, sy - swatchSize / 3, swatchSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        return;
+      }
+
+      ctx.fillStyle = isUnlocked ? '#999' : '#555';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(stat.label, x + 8 * uiScale, sy);
+
+      ctx.fillStyle = isUnlocked ? accentColor : '#555';
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(stat.value, x + w - 8 * uiScale, sy);
+
+      if (stat.raw !== undefined && isUnlocked) {
+        const maxRaw = this._getCategoryStatMax(category, stat.label);
+        if (maxRaw > 0) {
+          const barW = w * 0.45;
+          const barX = x + (w - barW) / 2;
+          const barY2 = sy + 2;
+          const barH2 = isPortrait ? 3 * uiScale : 4;
+          const ratio = Math.abs(stat.raw) / maxRaw;
+
+          ctx.fillStyle = 'rgba(30, 30, 60, 0.6)';
+          ctx.fillRect(barX, barY2, barW, barH2);
+
+          const fillColor = stat.lower ? (stat.raw < 0 ? '#00ff66' : '#ff4444') : (stat.raw > 0 ? '#00ff66' : '#ff4444');
+          ctx.fillStyle = fillColor + '80';
+          ctx.fillRect(barX, barY2, barW * Math.min(ratio, 1), barH2);
+        }
+      }
+    });
+
+    if (details.level !== undefined) {
+      const levelY = contentStartY + statCount * spacing + 4 * uiScale;
+      const levelW = w - 16 * uiScale;
+      const levelX = x + 8 * uiScale;
+      const dotSize = isPortrait ? 6 * uiScale : 8;
+      const dotGap = isPortrait ? 4 * uiScale : 5;
+      const totalDotsW = 5 * dotSize + 4 * dotGap;
+      const dotStartX = levelX + (levelW - totalDotsW) / 2;
+
+      for (let lvl = 0; lvl < 5; lvl++) {
+        const dx = dotStartX + lvl * (dotSize + dotGap);
+        ctx.fillStyle = lvl <= details.level ? accentColor : 'rgba(50, 50, 80, 0.6)';
+        if (lvl <= details.level) {
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = accentColor;
+        }
+        ctx.beginPath();
+        ctx.arc(dx + dotSize / 2, levelY, dotSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+
+  _getCategoryStatMax(category, label) {
+    switch (category) {
+      case 'engine':
+        if (label === '极速加成') return 90;
+        if (label === '加速加成') return 75;
+        if (label === '氮气提升') return 0.25;
+        return 0;
+      case 'tire':
+        if (label === '抓地力') return 1.45;
+        if (label === '漂移阻力') return 1.4;
+        if (label === '离道惩罚') return 1.5;
+        if (label === '转向加成') return 0.5;
+        if (label === '漂移角度') return 0.2;
+        return 0;
+      case 'drift':
+        if (label === '起漂阈值') return 0.55;
+        if (label === '最大漂角') return 0.9;
+        if (label === '起漂速度') return 3.5;
+        if (label === '恢复速度') return 4.5;
+        if (label === '抓地损失') return 0.15;
+        return 0;
+      default:
+        return 0;
+    }
+  }
+
+  _drawGarageRacePerformance(x, y, w, h, garage, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const history = garage.getRaceHistory();
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8 * uiScale);
+    ctx.stroke();
+
+    const titleSize = isPortrait ? 10 * uiScale : 12;
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#ffff00';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('📊 比赛表现', x + 10 * uiScale, y + 16 * uiScale);
+    ctx.shadowBlur = 0;
+
+    if (history.length === 0) {
+      const hintSize = isPortrait ? 9 * uiScale : 10;
+      ctx.fillStyle = '#555';
+      ctx.font = `${hintSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无比赛记录', x + w / 2, y + h / 2 + 4);
+      return;
+    }
+
+    const avgRank = garage.getAverageRank();
+    const winRate = garage.getWinRate();
+    const bestTime = garage.getBestTime();
+
+    const statY = y + 24 * uiScale;
+    const statSize = isPortrait ? 9 * uiScale : 10;
+    const valueSize = isPortrait ? 11 * uiScale : 13;
+    const colW = w / 3;
+
+    ctx.textAlign = 'center';
+    const labels = ['平均排名', '胜率', '最佳时间'];
+    const values = [
+      avgRank > 0 ? avgRank.toFixed(1) : '-',
+      winRate > 0 ? `${(winRate * 100).toFixed(0)}%` : '-',
+      bestTime > 0 ? Utils.formatTime(bestTime).slice(3) : '-'
+    ];
+    const colors = ['#00f5ff', '#00ff66', '#ffff00'];
+
+    labels.forEach((label, i) => {
+      const cx = x + colW * i + colW / 2;
+      ctx.fillStyle = '#888';
+      ctx.font = `${statSize}px monospace`;
+      ctx.fillText(label, cx, statY);
+      ctx.fillStyle = colors[i];
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = colors[i];
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.fillText(values[i], cx, statY + 16 * uiScale);
+      ctx.shadowBlur = 0;
+    });
+
+    const recentY = statY + 36 * uiScale;
+    const recentCount = Math.min(history.length, 5);
+    const barH = isPortrait ? 10 * uiScale : 12;
+    const barGap = isPortrait ? 3 * uiScale : 4;
+    const barAreaW = w - 20 * uiScale;
+    const barAreaX = x + 10 * uiScale;
+
+    ctx.fillStyle = '#666';
+    ctx.font = `${isPortrait ? 8 * uiScale : 9}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('近期排名', barAreaX, recentY);
+
+    for (let i = 0; i < recentCount; i++) {
+      const r = history[i];
+      const by = recentY + 10 * uiScale + i * (barH + barGap);
+      const rankColors = { 1: '#ffd700', 2: '#c0c0c0', 3: '#cd7f32' };
+      const barColor = rankColors[r.rank] || '#666';
+      const fillRatio = Math.max(0.15, 1 - (r.rank - 1) / 4);
+
+      ctx.fillStyle = 'rgba(30, 30, 60, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(barAreaX, by, barAreaW, barH, 3 * uiScale);
+      ctx.fill();
+
+      ctx.fillStyle = barColor;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = barColor;
+      ctx.beginPath();
+      ctx.roundRect(barAreaX, by, barAreaW * fillRatio, barH, 3 * uiScale);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${isPortrait ? 8 * uiScale : 9}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`P${r.rank}`, barAreaX + 4 * uiScale, by + barH * 0.8);
+
+      if (r.bestLap && r.bestLap < Infinity) {
+        ctx.fillStyle = '#aaa';
+        ctx.font = `${isPortrait ? 7 * uiScale : 8}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(Utils.formatTime(r.bestLap).slice(3), barAreaX + barAreaW - 4 * uiScale, by + barH * 0.8);
+      }
+    }
+  }
+
+  _drawGarageActionButton(x, y, w, h, game, garage, category, item, isUnlocked, canBuy, isSelected, accentColor, uiScale) {
+    const ctx = this.ctx;
+
+    let btnLabel = '';
+    let btnColor = '';
+    let btnEnabled = false;
+
+    if (isUnlocked && isSelected) {
+      btnLabel = '✓ 已装备';
+      btnColor = '#00ff66';
+      btnEnabled = false;
+    } else if (isUnlocked) {
+      btnLabel = '装备';
+      btnColor = accentColor;
+      btnEnabled = true;
+    } else if (canBuy) {
+      btnLabel = `购买 ${item.cost}💰`;
+      btnColor = '#ffff00';
+      btnEnabled = true;
+    } else {
+      btnLabel = '金币不足';
+      btnColor = '#666';
+      btnEnabled = false;
+    }
+
+    const bgColor = btnEnabled ? `rgba(${parseInt(btnColor.slice(1,3), 16)}, ${parseInt(btnColor.slice(3,5), 16)}, ${parseInt(btnColor.slice(5,7), 16)}, 0.15)` : 'rgba(30, 30, 50, 0.6)';
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = btnColor;
+    ctx.lineWidth = btnEnabled ? 2 : 1;
+    if (btnEnabled) {
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = btnColor;
+    }
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = btnColor;
+    ctx.shadowBlur = btnEnabled ? 6 : 0;
+    ctx.shadowColor = btnColor;
+    ctx.font = `bold ${h * 0.38}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(btnLabel, x + w / 2, y + h * 0.65);
+    ctx.shadowBlur = 0;
+  }
+
+  _drawGarageItemList(x, y, w, h, game, garage, category, isPortrait) {
+    const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const itemCount = garage.getCategoryItemCount(category);
+
+    const accentColor = category === 'engine' ? '#ff6600' :
+                       category === 'tire' ? '#00ff66' :
+                       category === 'paint' ? '#ff00ff' : '#00f5ff';
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10 * uiScale);
+    ctx.stroke();
+
+    const titleSize = isPortrait ? 13 * uiScale : 15;
+    ctx.fillStyle = '#888';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    const categoryTitles = { engine: '引擎升级', tire: '轮胎类型', paint: '喷漆颜色', drift: '漂移调校' };
+    ctx.fillText(categoryTitles[category], x + 15 * uiScale, y + 25 * uiScale);
+
+    const listTop = y + 40 * uiScale;
+    const listBottom = y + h - 15 * uiScale;
+    const listH = listBottom - listTop;
+
+    const itemGap = isPortrait ? 6 * uiScale : 8;
+    const itemH = isPortrait ? 50 * uiScale : 56;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = listTop + Math.max(0, (listH - totalItemH) / 2);
+
+    for (let i = 0; i < itemCount; i++) {
+      const item = garage.getItemByIndex(category, i);
+      const iy = startY + i * (itemH + itemGap);
+      const isSelected = i === game.garageItemCursor;
+      const isUnlocked = garage.isItemUnlocked(category, i);
+      const isEquipped = i === garage.getSelectedIndex(category);
+
+      if (isSelected) {
+        ctx.fillStyle = `${accentColor}15`;
+        ctx.beginPath();
+        ctx.roundRect(x + 8 * uiScale, iy, w - 16 * uiScale, itemH, 6 * uiScale);
+        ctx.fill();
+
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = accentColor;
+        ctx.beginPath();
+        ctx.roundRect(x + 8 * uiScale, iy, w - 16 * uiScale, itemH, 6 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      if (category === 'paint') {
+        const colorSize = isPortrait ? 24 * uiScale : 28;
+        const colorX = x + 20 * uiScale;
+        const colorY = iy + itemH / 2;
+
+        ctx.shadowBlur = isSelected ? 12 : 6;
+        ctx.shadowColor = item.color;
+        ctx.fillStyle = item.color;
+        ctx.beginPath();
+        ctx.arc(colorX, colorY, colorSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = isUnlocked ? '#ffffff40' : '#00000060';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(colorX, colorY, colorSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (category === 'engine') {
+        const iconX = x + 18 * uiScale;
+        const iconY = iy + itemH / 2;
+        const level = item.level || 0;
+        const iconSize = isPortrait ? 22 * uiScale : 26;
+
+        ctx.fillStyle = isUnlocked ? accentColor : '#444';
+        ctx.shadowBlur = isSelected ? 6 : 0;
+        ctx.shadowColor = accentColor;
+        ctx.font = `bold ${iconSize}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚙', iconX, iconY);
+        ctx.shadowBlur = 0;
+        ctx.textBaseline = 'alphabetic';
+      } else if (category === 'tire') {
+        const iconX = x + 20 * uiScale;
+        const iconY = iy + itemH / 2;
+        const iconSize = isPortrait ? 20 * uiScale : 24;
+
+        ctx.strokeStyle = isUnlocked ? accentColor : '#444';
+        ctx.lineWidth = 2.5;
+        ctx.shadowBlur = isSelected ? 6 : 0;
+        ctx.shadowColor = accentColor;
+        ctx.beginPath();
+        ctx.arc(iconX, iconY, iconSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(iconX, iconY, iconSize / 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      } else if (category === 'drift') {
+        const iconX = x + 20 * uiScale;
+        const iconY = iy + itemH / 2;
+        const iconSize = isPortrait ? 20 * uiScale : 24;
+
+        ctx.strokeStyle = isUnlocked ? accentColor : '#444';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = isSelected ? 6 : 0;
+        ctx.shadowColor = accentColor;
+        ctx.beginPath();
+        ctx.moveTo(iconX - iconSize / 2, iconY + iconSize / 3);
+        ctx.quadraticCurveTo(iconX, iconY - iconSize / 2, iconX + iconSize / 2, iconY + iconSize / 3);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const nameX = category === 'paint' ? x + 42 * uiScale : x + 45 * uiScale;
+      const nameSize = isPortrait ? 13 * uiScale : 14;
+      const subSize = isPortrait ? 10 * uiScale : 11;
+
+      const textColor = isUnlocked ? '#fff' : '#666';
+      ctx.fillStyle = textColor;
+      ctx.shadowBlur = isSelected ? 4 : 0;
+      ctx.shadowColor = isUnlocked ? accentColor : 'transparent';
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(item.name, nameX, iy + itemH * 0.42);
+      ctx.shadowBlur = 0;
+
+      if (category === 'engine') {
+        ctx.fillStyle = isUnlocked ? '#888' : '#444';
+        ctx.font = `${subSize}px monospace`;
+        ctx.fillText(`速度+${item.maxSpeedBonus} 加速+${item.accelerationBonus}`, nameX, iy + itemH * 0.72);
+      } else if (category === 'tire') {
+        ctx.fillStyle = isUnlocked ? '#888' : '#444';
+        ctx.font = `${subSize}px monospace`;
+        ctx.fillText(`抓地力 ${(item.grip * 100).toFixed(0)}%`, nameX, iy + itemH * 0.72);
+      } else if (category === 'drift') {
+        ctx.fillStyle = isUnlocked ? '#888' : '#444';
+        ctx.font = `${subSize}px monospace`;
+        ctx.fillText(`最大漂移角度 ${(item.maxDriftAngle * 100).toFixed(0)}°`, nameX, iy + itemH * 0.72);
+      }
+
+      if (isEquipped && isUnlocked) {
+        const badgeW = isPortrait ? 36 * uiScale : 42;
+        const badgeH = isPortrait ? 18 * uiScale : 20;
+        const badgeX = x + w - badgeW - 15 * uiScale;
+        const badgeY = iy + (itemH - badgeH) / 2;
+
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4 * uiScale);
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4 * uiScale);
+        ctx.stroke();
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${isPortrait ? 9 * uiScale : 10}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText('装备中', badgeX + badgeW / 2, badgeY + badgeH * 0.65);
+      } else if (!isUnlocked) {
+        const costX = x + w - 70 * uiScale;
+        const costY = iy + itemH * 0.6;
+
+        const canAfford = game.career.coins >= item.cost;
+        ctx.fillStyle = canAfford ? '#ffff00' : '#ff4444';
+        ctx.font = `bold ${subSize}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`💰 ${item.cost}`, x + w - 15 * uiScale, iy + itemH * 0.58);
+      }
+
+      if (!isUnlocked && category === 'engine') {
+        const prevUnlocked = garage.isItemUnlocked(category, i - 1);
+        if (!prevUnlocked && i > 0) {
+          ctx.fillStyle = '#ff4444';
+          ctx.font = `${subSize - 1}px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText('需先购买上一级', x + w - 15 * uiScale, iy + itemH * 0.82);
+        }
+      }
+    }
   }
 
   drawAchievements(game) {

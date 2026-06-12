@@ -14,8 +14,17 @@ class Bike {
     this.steerSpeed = 2.8;
     this.driftAngle = 0;
     this.driftFactor = 0;
+    this.driftThreshold = 0.4;
+    this.baseDriftAngleMax = 0.6;
+    this.driftBuildSpeed = 2;
+    this.driftRecoverSpeed = 3;
+    this.driftGripLoss = 0;
+    this.driftTireBonus = 0;
+    this.tireGrip = 1.0;
     this.isOnTrack = true;
     this.color = color;
+    this.accentColor = '#0088aa';
+    this.paintSpecial = null;
     this.isPlayer = isPlayer;
 
     this.lap = 0;
@@ -215,13 +224,16 @@ class Bike {
   }
 
   _updateDrift(steerInput, speedRatio, dt, isOnTrack) {
-    const driftThreshold = 0.4;
-    const targetDrift = steerInput * speedRatio * 0.6;
+    const maxDriftAngle = this.baseDriftAngleMax + this.driftTireBonus;
+    const targetDrift = steerInput * maxDriftAngle;
 
-    if (speedRatio > driftThreshold && Math.abs(steerInput) > 0.1 && isOnTrack) {
-      this.driftFactor = Math.min(this.driftFactor + dt * 2, 1);
+    const gripFactor = this.tireGrip - this.driftGripLoss;
+    const effectiveThreshold = this.driftThreshold / Math.max(0.5, gripFactor);
+
+    if (speedRatio > effectiveThreshold && Math.abs(steerInput) > 0.1 && isOnTrack) {
+      this.driftFactor = Math.min(this.driftFactor + dt * this.driftBuildSpeed, 1);
     } else {
-      this.driftFactor = Math.max(this.driftFactor - dt * 3, 0);
+      this.driftFactor = Math.max(this.driftFactor - dt * this.driftRecoverSpeed, 0);
     }
 
     this.driftAngle = Utils.lerp(this.driftAngle, targetDrift * this.driftFactor, dt * 8);
