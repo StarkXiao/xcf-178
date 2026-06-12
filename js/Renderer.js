@@ -964,6 +964,7 @@ class Renderer {
 
     this.drawNitroScreenOverlay(game.player);
     this.drawRouteHints(game.track, game.player);
+    this.drawAchievementNotification(game);
   }
 
   _drawSpeedometer(player, x, y, scale = 1) {
@@ -2198,7 +2199,7 @@ class Renderer {
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 310 * uiScale : 340;
+    const panelH = isPortrait ? 358 * uiScale : 395;
     const panelX = centerX - panelW / 2;
     const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 30;
 
@@ -2220,8 +2221,9 @@ class Renderer {
     const btnOffset0 = isPortrait ? 50 * uiScale : 65;
     const btnOffset1 = btnOffset0 + itemSpacing;
     const btnOffset2 = btnOffset1 + itemSpacing;
-    const btnOffset3 = btnOffset2 + itemSpacing + 8 * uiScale;
-    const btnOffset4 = btnOffset3 + itemSpacing;
+    const btnOffset3 = btnOffset2 + itemSpacing;
+    const btnOffset4 = btnOffset3 + itemSpacing + 8 * uiScale;
+    const btnOffset5 = btnOffset4 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -2250,17 +2252,23 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset3, panelW,
-      '操控设置',
+      '勋章成就',
       game.menuCursor === 3, uiScale
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset4, panelW,
-      '开始比赛',
+      '操控设置',
       game.menuCursor === 4, uiScale
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset4 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawMenuButton(
+      panelX, panelY + btnOffset5, panelW,
+      '开始比赛',
+      game.menuCursor === 5, uiScale
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset5 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -2566,7 +2574,10 @@ class Renderer {
     const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
     const recordBannerHeight = game.isHistoricalRecord ? 40 : 0;
     const obstacleStatsHeight = 170;
-    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight;
+    const achievementHeight = (game.achievements._newlyUnlocked && game.achievements._newlyUnlocked.length > 0)
+      ? 55 + game.achievements._newlyUnlocked.length * 28
+      : 0;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -2829,6 +2840,56 @@ class Renderer {
     ctx.fillText(`${aiTotalDestroyed} 个`, panelX + panelWidth - 30, infoY);
     ctx.textAlign = 'left';
 
+    const newlyUnlocked = game.achievements.getNewlyUnlocked();
+    if (newlyUnlocked.length > 0) {
+      infoY += 35;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 20;
+
+      const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+      const bannerY = infoY;
+      const bannerH = 30 + newlyUnlocked.length * 28;
+
+      const gradient = ctx.createLinearGradient(panelX, bannerY, panelX + panelWidth, bannerY);
+      gradient.addColorStop(0, 'rgba(0, 255, 255, 0)');
+      gradient.addColorStop(0.2, `rgba(0, 255, 255, ${0.1 * pulse})`);
+      gradient.addColorStop(0.5, `rgba(0, 255, 255, ${0.25 * pulse})`);
+      gradient.addColorStop(0.8, `rgba(0, 255, 255, ${0.1 * pulse})`);
+      gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(panelX, bannerY, panelWidth, bannerH);
+
+      ctx.fillStyle = '#00ffff';
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#00ffff';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎖️ 勋章解锁!', this.width / 2, infoY + 16);
+      ctx.shadowBlur = 0;
+      infoY += 28;
+
+      newlyUnlocked.forEach(item => {
+        ctx.fillStyle = item.tier.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = item.tier.color;
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${item.tier.icon} ${item.tier.name}`, panelX + 45, infoY);
+        ctx.fillStyle = '#888';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`奖励: ${item.tier.reward}`, panelX + panelWidth - 30, infoY);
+        ctx.shadowBlur = 0;
+        infoY += 28;
+      });
+      ctx.textAlign = 'left';
+    }
+
     ctx.fillStyle = '#00f5ff';
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#00f5ff';
@@ -2837,6 +2898,349 @@ class Renderer {
     ctx.fillText('按 空格键 返回菜单', this.width / 2, panelY + panelHeight - 25);
     ctx.shadowBlur = 0;
 
+    ctx.restore();
+  }
+
+  drawAchievements(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const bgGrad = ctx.createRadialGradient(
+      this.width * 0.5, this.height * 0.3, 0,
+      this.width * 0.5, this.height * 0.3, this.width * 0.6
+    );
+    bgGrad.addColorStop(0, 'rgba(0, 245, 255, 0.05)');
+    bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const titleY = isPortrait ? 28 * uiScale : 35;
+    const titleSize = isPortrait ? 22 * uiScale : 28;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = '#ffff00';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🎖️ 勋章成就', centerX, titleY);
+    ctx.shadowBlur = 0;
+
+    const unlockedCount = game.achievements.getUnlockedCount();
+    const totalCount = game.achievements.getTotalCount();
+    const totalPoints = game.achievements.getTotalPoints();
+    const subTitleY = titleY + (isPortrait ? 18 * uiScale : 22);
+    ctx.fillStyle = '#888';
+    ctx.font = `${(isPortrait ? 10 : 12) * uiScale}px monospace`;
+    ctx.fillText(`已解锁 ${unlockedCount}/${totalCount} 枚勋章`, centerX, subTitleY);
+
+    const pointsY = subTitleY + (isPortrait ? 16 * uiScale : 18);
+    const pointsPulse = Math.sin(Date.now() * 0.003) * 0.1 + 0.9;
+    ctx.shadowBlur = 8 * pointsPulse;
+    ctx.shadowColor = '#ffd700';
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `bold ${(isPortrait ? 13 : 15) * uiScale}px monospace`;
+    ctx.fillText(`⭐ 成就点数: ${totalPoints}`, centerX, pointsY);
+    ctx.shadowBlur = 0;
+
+    const panelW = isPortrait ? Math.min(350 * uiScale, this.width * 0.92) : 460;
+    const panelX = centerX - panelW / 2;
+    const panelY = pointsY + (isPortrait ? 18 * uiScale : 20);
+    const panelH = this.height - panelY - (isPortrait ? 35 : 45);
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
+    ctx.stroke();
+
+    const lineSpacing = isPortrait ? 110 * uiScale : 115;
+    const contentY = panelY + 10 * uiScale;
+    const contentH = panelH - 20 * uiScale;
+
+    const scrollOffset = Math.max(0, (game.achievementCursor - 2) * lineSpacing);
+    const maxScroll = Math.max(0, AchievementLineKeys.length * lineSpacing - contentH);
+    const actualScroll = Math.min(scrollOffset, maxScroll);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(panelX + 4, panelY + 4, panelW - 8, panelH - 8);
+    ctx.clip();
+
+    AchievementLineKeys.forEach((lineId, idx) => {
+      const line = AchievementLines[lineId];
+      const status = game.achievements.getLineStatus(lineId);
+      const isSelected = game.achievementCursor === idx;
+
+      const itemY = contentY + idx * lineSpacing - actualScroll;
+
+      if (itemY + lineSpacing < contentY || itemY > contentY + contentH) return;
+
+      const itemX = panelX + 10 * uiScale;
+      const itemW = panelW - 20 * uiScale;
+
+      if (isSelected) {
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.06)';
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, lineSpacing - 6 * uiScale, 8 * uiScale);
+        ctx.fill();
+
+        ctx.strokeStyle = line.color;
+        ctx.lineWidth = 2 * uiScale;
+        ctx.shadowBlur = 10 * uiScale;
+        ctx.shadowColor = line.color;
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, lineSpacing - 6 * uiScale, 8 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const nameSize = isPortrait ? 13 * uiScale : 15;
+      const descSize = isPortrait ? 9 * uiScale : 10;
+
+      ctx.fillStyle = line.color;
+      ctx.shadowBlur = isSelected ? 10 : 5;
+      ctx.shadowColor = line.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${line.icon} ${line.name}`, itemX + 10 * uiScale, itemY + 20 * uiScale);
+      ctx.shadowBlur = 0;
+
+      const progressSize = isPortrait ? 9 * uiScale : 10;
+      const currentValue = status.currentValue;
+      const nextTier = status.nextTier;
+
+      let progressPct = 0;
+      if (nextTier) {
+        if (line.isLowerBetter && currentValue > 0) {
+          progressPct = Math.min(100, Math.floor((nextTier.threshold / currentValue) * 100));
+        } else {
+          progressPct = Math.min(100, Math.floor((currentValue / nextTier.threshold) * 100));
+        }
+        ctx.fillStyle = '#aaa';
+        ctx.font = `${progressSize}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.floor(currentValue)}${line.unit} / ${nextTier.threshold}${line.unit}`, itemX + itemW - 10 * uiScale, itemY + 20 * uiScale);
+      } else {
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${progressSize}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`✓ 已满级`, itemX + itemW - 10 * uiScale, itemY + 20 * uiScale);
+      }
+
+      const tierY = itemY + 28 * uiScale;
+      const tierSize = isPortrait ? 42 * uiScale : 45;
+      const tierGap = isPortrait ? 4 * uiScale : 5;
+      const totalTierW = line.tiers.length * tierSize + (line.tiers.length - 1) * tierGap;
+      const tierStartX = itemX + (itemW - totalTierW) / 2;
+
+      line.tiers.forEach((tier, ti) => {
+        const tx = tierStartX + ti * (tierSize + tierGap);
+        const isUnlocked = !!game.achievements.getTierStatus(tier.id);
+
+        const tierBgAlpha = isUnlocked ? 0.15 : 0.05;
+        const tierBorderColor = isUnlocked ? tier.color : '#333';
+        const tierBgColor = isUnlocked
+          ? `rgba(${parseInt(tier.color.slice(1,3),16)}, ${parseInt(tier.color.slice(3,5),16)}, ${parseInt(tier.color.slice(5,7),16)}, ${tierBgAlpha})`
+          : `rgba(30, 30, 50, ${tierBgAlpha})`;
+
+        ctx.fillStyle = tierBgColor;
+        ctx.beginPath();
+        ctx.roundRect(tx, tierY, tierSize, tierSize, 6 * uiScale);
+        ctx.fill();
+
+        ctx.strokeStyle = tierBorderColor;
+        ctx.lineWidth = isUnlocked ? 2 * uiScale : 1;
+        if (isUnlocked) {
+          ctx.shadowBlur = 8 * uiScale;
+          ctx.shadowColor = tier.color;
+        }
+        ctx.beginPath();
+        ctx.roundRect(tx, tierY, tierSize, tierSize, 6 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        const iconSize = isPortrait ? 14 * uiScale : 16;
+        ctx.font = `${iconSize}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isUnlocked ? '#ffffff' : '#444';
+        ctx.globalAlpha = isUnlocked ? 1 : 0.4;
+        ctx.fillText(tier.icon, tx + tierSize / 2, tierY + tierSize * 0.35);
+        ctx.globalAlpha = 1;
+
+        const nameFontSize = isPortrait ? 6.5 * uiScale : 7.5;
+        ctx.font = `bold ${nameFontSize}px monospace`;
+        ctx.fillStyle = isUnlocked ? tier.color : '#555';
+        ctx.fillText(tier.name, tx + tierSize / 2, tierY + tierSize * 0.55);
+
+        if (tier.points) {
+          ctx.fillStyle = isUnlocked ? '#ffd700' : '#555';
+          ctx.font = `${nameFontSize - 0.5}px monospace`;
+          ctx.fillText(`+${tier.points}⭐`, tx + tierSize / 2, tierY + tierSize * 0.72);
+        }
+
+        if (tier.reward && isUnlocked) {
+          const reward = AchievementRewards[tier.reward];
+          if (reward) {
+            const rarityColor = RarityColors[reward.rarity] || '#888';
+            ctx.fillStyle = rarityColor;
+            ctx.font = `bold ${nameFontSize - 0.5}px monospace`;
+            ctx.fillText('🎁', tx + tierSize / 2, tierY + tierSize * 0.88);
+          }
+        } else if (isUnlocked) {
+          ctx.fillStyle = '#00ff66';
+          ctx.font = `bold ${nameFontSize}px monospace`;
+          ctx.fillText('✓', tx + tierSize / 2, tierY + tierSize * 0.88);
+        }
+      });
+
+      if (nextTier) {
+        const barY = tierY + tierSize + 6 * uiScale;
+        const barW = itemW - 20 * uiScale;
+        const barH = isPortrait ? 4 * uiScale : 5;
+        const barX = itemX + 10 * uiScale;
+
+        ctx.fillStyle = '#222';
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 3 * uiScale);
+        ctx.fill();
+
+        const progressRatio = Math.min(1, progressPct / 100);
+        const barGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+        barGrad.addColorStop(0, line.color);
+        barGrad.addColorStop(1, line.color + '88');
+        ctx.fillStyle = barGrad;
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = line.color;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW * progressRatio, barH, 3 * uiScale);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    ctx.restore();
+
+    const scrollBarW = 4 * uiScale;
+    const scrollBarX = panelX + panelW - scrollBarW - 2;
+    const scrollBarY = panelY + 4;
+    const scrollBarH = panelH - 8;
+    const totalContentH = AchievementLineKeys.length * lineSpacing;
+    if (totalContentH > contentH) {
+      const thumbH = Math.max(20, (contentH / totalContentH) * scrollBarH);
+      const thumbY = scrollBarY + (actualScroll / maxScroll) * (scrollBarH - thumbH);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.beginPath();
+      ctx.roundRect(scrollBarX, thumbY, scrollBarW, thumbH, 2);
+      ctx.fill();
+    }
+
+    const hintSize = isPortrait ? 9 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 选择  |  ESC/回车 返回', centerX, this.height - (isPortrait ? 16 : 22));
+
+    ctx.restore();
+  }
+
+  drawAchievementNotification(game) {
+    const notification = game.achievements.getNextNotification();
+    if (!notification) return;
+
+    const ctx = this.ctx;
+    const elapsed = 3.5 - game.achievements._notificationTimer;
+    let alpha = 1;
+    if (elapsed < 0.3) alpha = elapsed / 0.3;
+    if (elapsed > 2.8) alpha = Math.max(0, (3.5 - elapsed) / 0.7);
+
+    const { tier, line } = notification;
+    const reward = tier.reward ? AchievementRewards[tier.reward] : null;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const hasReward = !!reward;
+    const panelW = 320;
+    const panelH = hasReward ? 95 : 75;
+    const panelX = (this.width - panelW) / 2;
+    const panelY = 55;
+    const floatY = Math.sin(elapsed * 3) * 3;
+    const scale = 0.9 + alpha * 0.1;
+
+    ctx.globalAlpha = alpha;
+    ctx.translate(this.width / 2, panelY + panelH / 2 + floatY);
+    ctx.scale(scale, scale);
+    ctx.translate(-this.width / 2, -(panelY + panelH / 2 + floatY));
+
+    const pulse = Math.sin(elapsed * 6) * 0.2 + 0.8;
+    ctx.fillStyle = `rgba(10, 10, 30, 0.95)`;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY + floatY, panelW, panelH, 14);
+    ctx.fill();
+
+    ctx.strokeStyle = tier.color;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 18 * pulse;
+    ctx.shadowColor = tier.color;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY + floatY, panelW, panelH, 14);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#ffff00';
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 成就解锁!', this.width / 2, panelY + floatY + 22);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = tier.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = tier.color;
+    ctx.font = 'bold 17px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${tier.icon} ${tier.name}`, this.width / 2, panelY + floatY + 44);
+    ctx.shadowBlur = 0;
+
+    if (tier.points) {
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(`+${tier.points} 成就点数 ⭐`, this.width / 2, panelY + floatY + 60);
+    }
+
+    if (reward) {
+      const rarityColor = RarityColors[reward.rarity] || '#888';
+      const rarityName = RarityNames[reward.rarity] || '普通';
+      ctx.strokeStyle = rarityColor;
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = rarityColor;
+      ctx.beginPath();
+      ctx.roundRect(panelX + 20, panelY + floatY + 68, panelW - 40, 22, 6);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = rarityColor;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`🎁 奖励: ${reward.name} [${rarityName}]`, this.width / 2, panelY + floatY + 83);
+    }
+
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 }

@@ -1,6 +1,7 @@
 const GameState = {
   MENU: 'menu',
   VEHICLE_SELECT: 'vehicleSelect',
+  ACHIEVEMENTS: 'achievements',
   COUNTDOWN: 'countdown',
   RACING: 'racing',
   PAUSED: 'paused',
@@ -164,9 +165,12 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 5;
+    this.menuItemCount = 6;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
+    this.achievementCursor = 0;
+    this.achievementScrollY = 0;
+    this.achievements = new AchievementManager();
 
     this.track = null;
     this.player = null;
@@ -318,6 +322,10 @@ class Game {
         this._handleMenuClick(e);
       } else if (this.state === GameState.VEHICLE_SELECT) {
         this._handleVehicleSelectClick(e);
+      } else if (this.state === GameState.ACHIEVEMENTS) {
+        this.state = GameState.MENU;
+        this.menuCursor = 3;
+        this.touchManager.vibrate('menuSelect');
       } else if (this.state === GameState.PAUSED) {
         this._handlePauseClick(e);
       } else if (this.state === GameState.FINISHED) {
@@ -536,8 +544,9 @@ class Game {
     const itemY0 = panelY + btnOffset0;
     const itemY1 = itemY0 + itemSpacing;
     const itemY2 = itemY1 + itemSpacing;
-    const itemY3 = itemY2 + itemSpacing + 8 * uiScale;
-    const itemY4 = itemY3 + itemSpacing;
+    const itemY3 = itemY2 + itemSpacing;
+    const itemY4 = itemY3 + itemSpacing + 8 * uiScale;
+    const itemY5 = itemY4 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -553,10 +562,14 @@ class Game {
         this._openVehicleSelect();
       } else if (y >= itemY3 && y < itemY3 + 45) {
         this.menuCursor = 3;
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY4 && y < itemY4 + 45) {
         this.menuCursor = 4;
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      } else if (y >= itemY5 && y < itemY5 + 45) {
+        this.menuCursor = 5;
         this.startGame();
       }
     }
@@ -600,6 +613,9 @@ class Game {
       case GameState.VEHICLE_SELECT:
         this._updateVehicleSelect();
         break;
+      case GameState.ACHIEVEMENTS:
+        this._updateAchievements();
+        break;
       case GameState.COUNTDOWN:
         this._updateCountdown(dt);
         break;
@@ -637,10 +653,15 @@ class Game {
       }
     } else if (this.menuCursor === 3) {
       if (this.input.isMenuConfirm()) {
-        this._openSettingsPanel();
+        this._openAchievements();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 4) {
+      if (this.input.isMenuConfirm()) {
+        this._openSettingsPanel();
+        this.touchManager.vibrate('menuSelect');
+      }
+    } else if (this.menuCursor === 5) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -653,6 +674,30 @@ class Game {
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.state = GameState.VEHICLE_SELECT;
     this.touchManager.vibrate('menuSelect');
+  }
+
+  _openAchievements() {
+    this.achievementCursor = 0;
+    this.achievementScrollY = 0;
+    this.state = GameState.ACHIEVEMENTS;
+  }
+
+  _updateAchievements() {
+    if (this.input.isMenuUp()) {
+      this.achievementCursor = (this.achievementCursor - 1 + AchievementLineKeys.length) % AchievementLineKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.achievementCursor = (this.achievementCursor + 1) % AchievementLineKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuConfirm() || this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.menuCursor = 3;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
   }
 
   _updateVehicleSelect() {
@@ -1003,16 +1048,18 @@ class Game {
     const allFinished = this.getAllBikes().every(b => b.finished);
     if (allFinished || this.player.finished) {
       this._saveBestLapRecord();
+      this._processAchievements();
       this.state = GameState.FINISHED;
     }
 
     this.renderer.updateCamera(this.player, dt);
+    this.achievements.updateNotificationTimer(dt);
   }
 
   _updateFinished() {
     if (this.input.isMenuConfirm()) {
       this.state = GameState.MENU;
-      this.menuCursor = 4;
+      this.menuCursor = 5;
       this.input.clearJustPressed();
     }
   }
@@ -1105,7 +1152,7 @@ class Game {
     }
 
     this.state = GameState.MENU;
-    this.menuCursor = 4;
+    this.menuCursor = 5;
     this._prevStateBeforePause = null;
     this.input.reset();
     this.touchManager.reset();
@@ -1129,6 +1176,11 @@ class Game {
 
     if (this.state === GameState.VEHICLE_SELECT) {
       this.renderer.drawVehicleSelect(this);
+      return;
+    }
+
+    if (this.state === GameState.ACHIEVEMENTS) {
+      this.renderer.drawAchievements(this);
       return;
     }
 
@@ -1181,6 +1233,28 @@ class Game {
     try {
       localStorage.setItem('neonRacer_selectedVehicle', vehicleId);
     } catch (e) {}
+  }
+
+  _processAchievements() {
+    const rankings = this.getRankings();
+    const playerRank = rankings.find(r => r.bike.isPlayer);
+    const rank = playerRank ? playerRank.rank : rankings.length + 1;
+    const totalCollisions = (this.player.obstacleCollisions || 0) + (this.collision._bikeCollisionCount || 0);
+    const driftDistance = this.player.totalDriftDistance || 0;
+    const bestLapTime = this.player.bestLapTime;
+    const obstaclesDestroyed = this.player.obstaclesDestroyed || 0;
+    const nitroTotalTime = this.player.totalNitroTime || 0;
+    const finished = this.player.finished;
+
+    this.achievements.processRaceResults({
+      playerRank: rank,
+      playerCollisions: totalCollisions,
+      raceDriftDistance: driftDistance,
+      bestLapTime: bestLapTime,
+      obstaclesDestroyed: obstaclesDestroyed,
+      nitroTotalTime: nitroTotalTime,
+      finished: finished
+    });
   }
 
   _loadBestLapRecords() {

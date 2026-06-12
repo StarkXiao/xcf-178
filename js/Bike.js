@@ -60,6 +60,9 @@ class Bike {
     this.nitroBurstTimer = 0;
     this.nitroReadyPulse = 0;
     this.prevNitroActive = false;
+
+    this.totalDriftDistance = 0;
+    this.totalNitroTime = 0;
   }
 
   update(dt, input, track) {
@@ -108,6 +111,10 @@ class Bike {
     this.x += Math.cos(moveAngle) * this.speed * dt;
     this.y += Math.sin(moveAngle) * this.speed * dt;
 
+    if (this.driftFactor > 0.5 && Math.abs(this.speed) > 50) {
+      this.totalDriftDistance += Math.abs(this.speed) * this.driftFactor * dt;
+    }
+
     this._addSkidMarks(this.isOnTrack, speedRatio, steerInput);
 
     if (this.nitroActive) {
@@ -155,6 +162,7 @@ class Bike {
 
     if (this.nitroActive) {
       this.nitroDuration += dt;
+      this.totalNitroTime += dt;
       this.nitroEnergy -= this.nitroConsumeRate * dt;
 
       if (this.nitroEnergy <= 0 || !input.nitro) {
@@ -393,5 +401,7 @@ class Bike {
     this.nitroBurstTimer = 0;
     this.nitroReadyPulse = 0;
     this.prevNitroActive = false;
+    this.totalDriftDistance = 0;
+    this.totalNitroTime = 0;
   }
 }
