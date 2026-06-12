@@ -1064,7 +1064,12 @@ class Game {
     const touchControls = document.getElementById('touchControls');
     if (touchControls) {
       touchControls.classList.add('paused');
+      const touchBtns = touchControls.querySelectorAll('.touch-btn');
+      touchBtns.forEach(btn => btn.classList.remove('touch-active'));
     }
+
+    this.input.reset();
+    this.touchManager.reset();
 
     this.state = GameState.PAUSED;
     this.touchManager.vibrate('menuSelect');
@@ -1081,12 +1086,15 @@ class Game {
     const touchControls = document.getElementById('touchControls');
     if (touchControls) {
       touchControls.classList.remove('paused');
+      const touchBtns = touchControls.querySelectorAll('.touch-btn');
+      touchBtns.forEach(btn => btn.classList.remove('touch-active'));
     }
 
     this.state = this._prevStateBeforePause;
     this._prevStateBeforePause = null;
 
-    this.input.clearJustPressed();
+    this.input.reset();
+    this.touchManager.reset();
     this.touchManager.vibrate('menuSelect');
   }
 
