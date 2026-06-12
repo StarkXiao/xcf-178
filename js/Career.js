@@ -411,7 +411,7 @@ class CareerManager {
     });
   }
 
-  processRaceResult(eventId, rank, time, bestLap) {
+  processRaceResult(eventId, rank, time, bestLap, totalLaps) {
     const result = this.getEventById(eventId);
     if (!result) return { coinsEarned: 0, isNewBest: false };
 
@@ -429,6 +429,7 @@ class CareerManager {
         rank: rank,
         time: time,
         bestLap: bestLap,
+        totalLaps: totalLaps || event.laps,
         date: Date.now()
       };
     }
@@ -439,7 +440,8 @@ class CareerManager {
       time: time,
       bestLap: bestLap,
       coinsEarned: coinsEarned,
-      isNewBest: isNewBest
+      isNewBest: isNewBest,
+      totalLaps: totalLaps || event.laps
     };
 
     this._checkStageCompletion(result.stage);

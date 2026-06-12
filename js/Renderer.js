@@ -4287,7 +4287,7 @@ class Renderer {
     const infos = [
       { label: '总用时', value: Utils.formatTime(result.time), color: '#00f5ff', icon: '⏱️' },
       { label: '最佳单圈', value: result.bestLap ? Utils.formatTime(result.bestLap) : '--:--:--', color: '#00ff66', icon: '🏁' },
-      { label: '比赛圈数', value: event ? `${event.laps} 圈` : '-', color: '#ff00ff', icon: '🔄' },
+      { label: '比赛圈数', value: `${result.totalLaps || (event ? event.laps : '-')} 圈`, color: '#ff00ff', icon: '🔄' },
       { label: '难度', value: event ? diffCfg.label : '-', color: diffCfg.color, icon: '⚔️' }
     ];
 

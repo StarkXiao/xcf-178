@@ -769,12 +769,15 @@ class Game {
 
     const event = selected.event;
     this.difficulty = event.difficulty;
-    this.totalLaps = event.laps;
-    this.lapIndex = LapOptions.indexOf(event.laps);
-    if (this.lapIndex < 0) this.lapIndex = 1;
+    const laps = event.laps;
 
     this._applySettings();
     this._resetRace();
+
+    this.totalLaps = laps;
+    this.lapIndex = LapOptions.indexOf(laps);
+    if (this.lapIndex < 0) this.lapIndex = 1;
+
     this.career.applyUpgradesToBike(this.player, this.selectedVehicle);
 
     const touchControls = document.getElementById('touchControls');
@@ -1482,7 +1485,8 @@ class Game {
           this.career.selectedEventId,
           rank,
           time,
-          bestLap
+          bestLap,
+          this.totalLaps
         );
 
         this.careerRaceResultData = {
@@ -1490,7 +1494,9 @@ class Game {
           time: time,
           bestLap: bestLap,
           coinsEarned: result.coinsEarned,
-          isNewBest: result.isNewBest
+          isNewBest: result.isNewBest,
+          totalLaps: this.totalLaps,
+          eventId: this.career.selectedEventId
         };
 
         this.state = GameState.CAREER_RACE_RESULT;
