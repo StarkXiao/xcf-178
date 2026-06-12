@@ -366,6 +366,63 @@ class Track {
     this.checkpoints = mainRoute.checkpoints;
   }
 
+  loadFromConfig(config) {
+    this.width = config.width || config.trackWidth || 180;
+    this.routes = new Map();
+    this.branchPoints = [];
+    this.obstacles = [];
+    this.currentRouteId = 'main';
+
+    if (config.routes) {
+      config.routes.forEach(routeData => {
+        const points = routeData.points.map(p => ({ x: p.x, y: p.y }));
+        const route = new Route(
+          routeData.id,
+          routeData.name,
+          points,
+          routeData.color || '#00f5ff',
+          routeData.isShortcut || false,
+          routeData.lengthBonus || 1.0
+        );
+
+        if (routeData.checkpoints && routeData.checkpoints.length > 0) {
+          route.checkpoints = routeData.checkpoints.map(cp => ({
+            ...cp,
+            routeId: route.id,
+            angle: cp.angle || 0
+          }));
+        }
+
+        this.routes.set(route.id, route);
+      });
+    }
+
+    if (config.branchPoints) {
+      config.branchPoints.forEach(bp => {
+        this.branchPoints.push(new BranchPoint(
+          bp.distance,
+          { x: bp.position.x, y: bp.position.y },
+          bp.routes,
+          bp.triggerRadius || 100
+        ));
+      });
+    }
+
+    if (config.obstacles) {
+      config.obstacles.forEach(obs => {
+        this.obstacles.push(new Obstacle(
+          obs.x,
+          obs.y,
+          obs.type || 'crate',
+          obs.routeId || 'main'
+        ));
+      });
+    }
+
+    this.points = this.routes.get('main')?.points || [];
+    this._syncMainRoute();
+  }
+
   getRoute(routeId) {
     return this.routes.get(routeId) || this.routes.get('main');
   }
@@ -477,5 +534,66 @@ class Track {
   getEffectiveTotalLength(routeId) {
     const route = this.getRoute(routeId);
     return route.totalLength * route.lengthBonus;
+  }
+
+  loadFromConfig(config) {
+    this.width = config.width || 180;
+    this.routes = new Map();
+    this.branchPoints = [];
+    this.obstacles = [];
+    this.currentRouteId = 'main';
+
+    if (config.routes) {
+      config.routes.forEach(routeData => {
+        const route = new Route(
+          routeData.id,
+          routeData.name,
+          routeData.points,
+          routeData.color || '#00f5ff',
+          routeData.isShortcut || false,
+          routeData.lengthBonus || 1.0
+        );
+
+        if (routeData.checkpoints && routeData.checkpoints.length > 0) {
+          route.checkpoints = routeData.checkpoints.map(cp => ({
+            ...cp,
+            routeId: route.id,
+            angle: cp.angle || 0
+          }));
+        }
+
+        this.routes.set(route.id, route);
+      });
+    }
+
+    if (config.branchPoints) {
+      config.branchPoints.forEach(bpData => {
+        this.branchPoints.push(new BranchPoint(
+          bpData.distance,
+          bpData.position,
+          bpData.routes,
+          bpData.triggerRadius || 100
+        ));
+      });
+    }
+
+    if (config.obstacles) {
+      config.obstacles.forEach(obsData => {
+        this.obstacles.push(new Obstacle(
+          obsData.x,
+          obsData.y,
+          obsData.type || 'crate',
+          obsData.routeId || 'main'
+        ));
+      });
+    }
+
+    const mainRoute = this.routes.get('main');
+    if (mainRoute) {
+      this.totalLength = mainRoute.totalLength;
+      this.segmentLengths = mainRoute.segmentLengths;
+      this.points = mainRoute.points;
+      this.checkpoints = mainRoute.checkpoints;
+    }
   }
 }

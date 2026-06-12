@@ -2221,9 +2221,9 @@ class Renderer {
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 358 * uiScale : 355;
+    const panelH = isPortrait ? 440 * uiScale : 440;
     const panelX = centerX - panelW / 2;
-    const panelY = isPortrait ? titleY + 80 * uiScale : centerY - 60;
+    const panelY = isPortrait ? titleY + 60 * uiScale : centerY - 100;
 
     ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
     ctx.beginPath();
@@ -2239,13 +2239,16 @@ class Renderer {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    const itemSpacing = isPortrait ? 48 * uiScale : 45;
-    const btnOffset0 = isPortrait ? 50 * uiScale : 55;
+    const itemSpacing = isPortrait ? 42 * uiScale : 42;
+    const btnOffset0 = isPortrait ? 45 * uiScale : 50;
     const btnOffset1 = btnOffset0 + itemSpacing;
     const btnOffset2 = btnOffset1 + itemSpacing;
     const btnOffset3 = btnOffset2 + itemSpacing;
-    const btnOffset4 = btnOffset3 + itemSpacing + 6 * uiScale;
+    const btnOffset4 = btnOffset3 + itemSpacing;
     const btnOffset5 = btnOffset4 + itemSpacing;
+    const btnOffset6 = btnOffset5 + itemSpacing + 6 * uiScale;
+    const btnOffset7 = btnOffset6 + itemSpacing;
+    const btnOffset8 = btnOffset7 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -2267,30 +2270,50 @@ class Renderer {
       game.menuCursor === 2, uiScale
     );
 
-    const vehiclePreviewScale = isPortrait ? 0.5 * uiScale : 0.6;
+    const vehiclePreviewScale = isPortrait ? 0.45 * uiScale : 0.55;
     const vehiclePreviewX = panelX + panelW - 35 * uiScale;
-    const vehiclePreviewY = panelY + btnOffset2 + 8 * uiScale;
+    const vehiclePreviewY = panelY + btnOffset2 + 6 * uiScale;
     this._drawVehiclePreview(vehiclePreviewX, vehiclePreviewY, vehicle, vehiclePreviewScale, game.menuCursor === 2);
 
     this._drawMenuButton(
       panelX, panelY + btnOffset3, panelW,
-      '勋章成就',
+      '车库改装',
       game.menuCursor === 3, uiScale
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset4, panelW,
-      '操控设置',
+      '职业生涯',
       game.menuCursor === 4, uiScale
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset5, panelW,
-      '开始比赛',
+      '勋章成就',
       game.menuCursor === 5, uiScale
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset5 + 35 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawMenuButton(
+      panelX, panelY + btnOffset6, panelW,
+      '操控设置',
+      game.menuCursor === 6, uiScale
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + btnOffset7, panelW,
+      '🏁 赛事编辑器',
+      game.menuCursor === 7, uiScale,
+      '#ff6600'
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + btnOffset8, panelW,
+      '开始比赛',
+      game.menuCursor === 8, uiScale,
+      '#00ff66'
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset8 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -2415,7 +2438,7 @@ class Renderer {
     ctx.fillText('▶', arrowXRight, y + 10 * scale);
   }
 
-  _drawMenuButton(x, y, w, label, selected, scale = 1) {
+  _drawMenuButton(x, y, w, label, selected, scale = 1, customColor = null) {
     const ctx = this.ctx;
     const btnPadding = 60 * scale;
     const btnX = x + btnPadding;
@@ -2423,9 +2446,10 @@ class Renderer {
     const btnH = 40 * scale;
     const textSize = 18 * scale;
 
-    const bgColor = selected ? 'rgba(0, 245, 255, 0.15)' : 'rgba(40, 40, 60, 0.8)';
-    const borderColor = selected ? '#00f5ff' : '#444';
-    const textColor = selected ? '#00f5ff' : '#888';
+    const accentColor = customColor || '#00f5ff';
+    const bgColor = selected ? `${accentColor}26` : 'rgba(40, 40, 60, 0.8)';
+    const borderColor = selected ? accentColor : '#444';
+    const textColor = selected ? accentColor : '#888';
 
     ctx.fillStyle = bgColor;
     ctx.beginPath();

@@ -11,7 +11,8 @@ const GameState = {
   COUNTDOWN: 'countdown',
   RACING: 'racing',
   PAUSED: 'paused',
-  FINISHED: 'finished'
+  FINISHED: 'finished',
+  RACE_EDITOR: 'raceEditor'
 };
 
 const VehicleTypes = {
@@ -171,7 +172,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 8;
+    this.menuItemCount = 9;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
@@ -195,6 +196,11 @@ class Game {
     this.bestLapRecords = this._loadBestLapRecords();
     this.isHistoricalRecord = false;
 
+    this.raceEditor = null;
+    this.replaySystem = null;
+    this._editorConfig = null;
+    this._isEditorMode = false;
+
     this.lastTime = 0;
     this.running = false;
     this._prevPlayerLap = 0;
@@ -210,6 +216,13 @@ class Game {
   _init() {
     this.track = new Track(200);
     this.collision = new Collision(this.track);
+
+    if (!this.raceEditor) {
+      this.raceEditor = new RaceEditor(this.canvas, this);
+    }
+    if (!this.replaySystem) {
+      this.replaySystem = new ReplaySystem(this);
+    }
 
     const cfg = DifficultySettings[this.difficulty];
     const vehicle = VehicleTypes[this.selectedVehicle];
@@ -585,6 +598,7 @@ class Game {
     const itemY5 = itemY4 + itemSpacing;
     const itemY6 = itemY5 + itemSpacing + 8 * uiScale;
     const itemY7 = itemY6 + itemSpacing;
+    const itemY8 = itemY7 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -616,6 +630,10 @@ class Game {
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY7 && y < itemY7 + 45) {
         this.menuCursor = 7;
+        this._openRaceEditor();
+        this.touchManager.vibrate('menuSelect');
+      } else if (y >= itemY7 + itemSpacing && y < itemY7 + itemSpacing + 45) {
+        this.menuCursor = 8;
         this.startGame();
       }
     }
@@ -652,6 +670,16 @@ class Game {
   }
 
   _update(dt) {
+    if (this.replaySystem && (this.replaySystem.getState() === ReplayState.RECORDING ||
+        this.replaySystem.getState() === ReplayState.PLAYING ||
+        this.replaySystem.getState() === ReplayState.PAUSED)) {
+      this.replaySystem.update(dt);
+    }
+
+    if (this.state === GameState.RACE_EDITOR) {
+      return;
+    }
+
     switch (this.state) {
       case GameState.MENU:
         this._updateMenu();
@@ -737,6 +765,11 @@ class Game {
       }
     } else if (this.menuCursor === 7) {
       if (this.input.isMenuConfirm()) {
+        this._openRaceEditor();
+        this.touchManager.vibrate('menuSelect');
+      }
+    } else if (this.menuCursor === 8) {
+      if (this.input.isMenuConfirm()) {
         this.startGame();
       }
     }
@@ -787,6 +820,79 @@ class Game {
     this.careerUpgradeCursor = 0;
     this.state = GameState.CAREER_UPGRADE;
     this.touchManager.vibrate('menuSelect');
+  }
+
+  _openRaceEditor() {
+    this.state = GameState.RACE_EDITOR;
+    this._isEditorMode = true;
+    if (this.raceEditor) {
+      this.raceEditor.show();
+    }
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  loadEditorTrack(config) {
+    this._editorConfig = config;
+    this._isEditorMode = true;
+    this.totalLaps = config.laps;
+    this.difficulty = config.aiDifficulty;
+
+    const trackData = {
+      width: config.trackWidth,
+      routes: [{
+        id: 'main',
+        name: config.name,
+        points: [...(config.nodes || config.routes[0].points)],
+        color: '#00f5ff',
+        isShortcut: false,
+        lengthBonus: 1.0,
+        checkpoints: config.checkpoints || config.routes[0].checkpoints || []
+      }]
+    };
+
+    this.track = new Track(config.trackWidth);
+    this.track.loadFromConfig(trackData);
+    this.collision = new Collision(this.track);
+
+    const vehicle = VehicleTypes[this.selectedVehicle];
+    const totalBikes = config.aiCount + 1;
+    const startPositions = this.track.getStartPositions(totalBikes, 60);
+    const playerGridIndex = Math.min(0, config.aiCount);
+
+    this.player = new Bike(
+      startPositions[playerGridIndex].x,
+      startPositions[playerGridIndex].y,
+      startPositions[playerGridIndex].angle,
+      vehicle.color,
+      true
+    );
+    this._applyVehicleAndDifficulty(this.player, vehicle, DifficultySettings[this.difficulty]);
+    this.garage.applyUpgradesToBike(this.player, this.selectedVehicle);
+    this.collision.damageMultiplier = DifficultySettings[this.difficulty].collisionDamage;
+
+    this.aiBikes = [];
+    const aiColors = ['#ff00ff', '#ff6600', '#00ff66', '#ffff00', '#ff0066', '#ff66ff', '#66ff00', '#00ffff'];
+
+    for (let i = 0; i < config.aiCount; i++) {
+      const posIndex = i < playerGridIndex ? i : i + 1;
+      if (posIndex >= startPositions.length) break;
+
+      const pos = startPositions[posIndex];
+      const ai = new AIBike(
+        pos.x,
+        pos.y,
+        pos.angle,
+        aiColors[i % aiColors.length],
+        config.aiDifficulty
+      );
+      ai.offTrackFriction = vehicle.baseOffTrackFriction + DifficultySettings[this.difficulty].offTrackFrictionBonus;
+      this.aiBikes.push(ai);
+    }
+
+    this.renderer.camera.x = this.player.x;
+    this.renderer.camera.y = this.player.y;
+    this.input.reset();
+    this.touchManager.reset();
   }
 
   _startCareerRace() {
@@ -1501,6 +1607,10 @@ class Game {
       touchControls.classList.remove('paused');
     }
 
+    if (this._isEditorMode && this.replaySystem) {
+      this.replaySystem.startRecording();
+    }
+
     this._prevStateBeforePause = null;
     this.state = GameState.COUNTDOWN;
     this.countdown = 3;
@@ -1692,6 +1802,10 @@ class Game {
 
     const allFinished = this.getAllBikes().every(b => b.finished);
     if (allFinished || this.player.finished) {
+      if (this.replaySystem && this.replaySystem.getState() === ReplayState.RECORDING) {
+        this.replaySystem.stopRecording();
+      }
+
       this._saveBestLapRecord();
       this._processAchievements();
 
@@ -1742,8 +1856,17 @@ class Game {
 
   _updateFinished() {
     if (this.input.isMenuConfirm()) {
-      this.state = GameState.MENU;
-      this.menuCursor = 5;
+      if (this._isEditorMode) {
+        this._isEditorMode = false;
+        this._init();
+        this.state = GameState.RACE_EDITOR;
+        if (this.raceEditor) {
+          this.raceEditor.show();
+        }
+      } else {
+        this.state = GameState.MENU;
+        this.menuCursor = 7;
+      }
       this.input.clearJustPressed();
     }
   }
@@ -1835,8 +1958,17 @@ class Game {
       touchControls.classList.remove('paused');
     }
 
+    if (this.replaySystem && this.replaySystem.getState() !== ReplayState.IDLE) {
+      this.replaySystem.stopReplay();
+    }
+
+    if (this._isEditorMode) {
+      this._isEditorMode = false;
+      this._init();
+    }
+
     this.state = GameState.MENU;
-    this.menuCursor = 5;
+    this.menuCursor = 7;
     this._prevStateBeforePause = null;
     this.input.reset();
     this.touchManager.reset();
@@ -1852,6 +1984,23 @@ class Game {
 
   _render() {
     this.renderer.clear();
+
+    if (this.state === GameState.RACE_EDITOR) {
+      if (this.raceEditor) {
+        this.raceEditor.render();
+      }
+      return;
+    }
+
+    if (this.replaySystem && (this.replaySystem.getState() === ReplayState.PLAYING ||
+        this.replaySystem.getState() === ReplayState.PAUSED)) {
+      const mainBike = this.replaySystem.getMainReplayBike();
+      if (mainBike) {
+        this.renderer.updateCamera(mainBike, 0.016);
+      }
+      this.replaySystem.render(this.renderer.ctx, this.renderer);
+      return;
+    }
 
     if (this.state === GameState.MENU) {
       this.renderer.drawMenu(this);
