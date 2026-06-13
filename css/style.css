@@ -657,6 +657,58 @@ html, body {
   }
 }
 
+.touch-controls-p2 {
+  top: 20px;
+  bottom: auto;
+}
+
+.touch-controls-p2 .btn-left,
+.touch-controls-p2 .btn-right {
+  border-color: #ff00ff;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.5), inset 0 0 10px rgba(255, 0, 255, 0.2);
+}
+
+.touch-controls-p2 .btn-left:active,
+.touch-controls-p2 .btn-right:active,
+.touch-controls-p2 .btn-left.touch-active,
+.touch-controls-p2 .btn-right.touch-active {
+  background: rgba(255, 0, 255, 0.3);
+  box-shadow: 0 0 25px rgba(255, 0, 255, 0.8), inset 0 0 15px rgba(255, 0, 255, 0.4);
+}
+
+.touch-controls-p2 .btn-accel {
+  border-color: #ff6600;
+  box-shadow: 0 0 15px rgba(255, 102, 0, 0.5), inset 0 0 10px rgba(255, 102, 0, 0.2);
+}
+
+.touch-controls-p2 .btn-accel:active,
+.touch-controls-p2 .btn-accel.touch-active {
+  background: rgba(255, 102, 0, 0.3);
+  box-shadow: 0 0 25px rgba(255, 102, 0, 0.8), inset 0 0 15px rgba(255, 102, 0, 0.4);
+}
+
+.touch-controls-p2 .btn-brake {
+  border-color: #ff0044;
+  box-shadow: 0 0 15px rgba(255, 0, 68, 0.5), inset 0 0 10px rgba(255, 0, 68, 0.2);
+}
+
+.touch-controls-p2 .btn-brake:active,
+.touch-controls-p2 .btn-brake.touch-active {
+  background: rgba(255, 0, 68, 0.3);
+  box-shadow: 0 0 25px rgba(255, 0, 68, 0.8), inset 0 0 15px rgba(255, 0, 68, 0.4);
+}
+
+.touch-controls-p2 .btn-nitro {
+  border-color: #ffff00;
+  box-shadow: 0 0 15px rgba(255, 255, 0, 0.5), inset 0 0 10px rgba(255, 255, 0, 0.2);
+}
+
+.touch-controls-p2 .btn-nitro:active,
+.touch-controls-p2 .btn-nitro.touch-active {
+  background: rgba(255, 255, 0, 0.3);
+  box-shadow: 0 0 25px rgba(255, 255, 0, 0.8), inset 0 0 15px rgba(255, 255, 0, 0.4);
+}
+
 .touch-controls.fade-out {
   opacity: 0.3;
 }

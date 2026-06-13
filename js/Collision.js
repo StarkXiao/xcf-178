@@ -5,6 +5,9 @@ class Collision {
     this._bikeCollisionCount = 0;
     this._obstacleCollisionCount = 0;
     this._obstaclesDestroyedTotal = 0;
+    this._duelCollisionCount = 0;
+    this._lastDuelCollisionTime = 0;
+    this._playerDuelStats = new Map();
   }
 
   checkTrackCollision(bike) {
@@ -47,18 +50,71 @@ class Collision {
       bike1.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
       bike2.speed = avgSpeed * (0.5 + this.damageMultiplier * 0.3);
 
-      if (bike1.isPlayer) {
-        if (!bike1.bikeCollisions) bike1.bikeCollisions = 0;
-        bike1.bikeCollisions++;
-      }
-      if (bike2.isPlayer) {
-        if (!bike2.bikeCollisions) bike2.bikeCollisions = 0;
-        bike2.bikeCollisions++;
+      const isDuel = bike1.isPlayer && bike2.isPlayer &&
+                     bike1.playerIndex !== bike2.playerIndex;
+
+      if (isDuel) {
+        this._duelCollisionCount++;
+        this._lastDuelCollisionTime = performance.now();
+
+        if (!bike1.duelCollisions) bike1.duelCollisions = 0;
+        if (!bike2.duelCollisions) bike2.duelCollisions = 0;
+        bike1.duelCollisions++;
+        bike2.duelCollisions++;
+
+        const speedAdvantage = Math.abs(bike1.speed - bike2.speed);
+        if (speedAdvantage > 50) {
+          const fasterBike = bike1.speed > bike2.speed ? bike1 : bike2;
+          const slowerBike = bike1.speed > bike2.speed ? bike2 : bike1;
+          fasterBike.speed *= 0.92;
+          slowerBike.speed *= 0.75;
+          if (!fasterBike.duelTakedowns) fasterBike.duelTakedowns = 0;
+          fasterBike.duelTakedowns++;
+        }
+
+        this._recordDuelStats(bike1, bike2, speedAdvantage);
+      } else {
+        if (bike1.isPlayer) {
+          if (!bike1.bikeCollisions) bike1.bikeCollisions = 0;
+          bike1.bikeCollisions++;
+        }
+        if (bike2.isPlayer) {
+          if (!bike2.bikeCollisions) bike2.bikeCollisions = 0;
+          bike2.bikeCollisions++;
+        }
       }
 
       return true;
     }
     return false;
+  }
+
+  _recordDuelStats(bike1, bike2, speedDiff) {
+    const now = performance.now();
+    for (const bike of [bike1, bike2]) {
+      const idx = bike.playerIndex;
+      if (!this._playerDuelStats.has(idx)) {
+        this._playerDuelStats.set(idx, {
+          collisions: 0,
+          totalSpeedDiff: 0,
+          lastCollisionTime: 0,
+          maxSpeedImpact: 0
+        });
+      }
+      const stats = this._playerDuelStats.get(idx);
+      stats.collisions++;
+      stats.totalSpeedDiff += speedDiff;
+      stats.lastCollisionTime = now;
+      stats.maxSpeedImpact = Math.max(stats.maxSpeedImpact, speedDiff);
+    }
+  }
+
+  getDuelStats() {
+    return {
+      totalDuelCollisions: this._duelCollisionCount,
+      lastDuelTime: this._lastDuelCollisionTime,
+      playerStats: Object.fromEntries(this._playerDuelStats)
+    };
   }
 
   checkAllBikeCollisions(bikes) {

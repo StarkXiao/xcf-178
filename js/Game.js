@@ -1,6 +1,7 @@
 const GameState = {
   MENU: 'menu',
   VEHICLE_SELECT: 'vehicleSelect',
+  VEHICLE_SELECT_P2: 'vehicleSelectP2',
   GARAGE: 'garage',
   ACHIEVEMENTS: 'achievements',
   CAREER_MAP: 'careerMap',
@@ -14,6 +15,7 @@ const GameState = {
   WANTED_RESULT: 'wantedResult',
   PAUSED: 'paused',
   FINISHED: 'finished',
+  SPLITSCREEN_FINISHED: 'splitscreenFinished',
   RACE_EDITOR: 'raceEditor'
 };
 
@@ -174,7 +176,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 10;
+    this.menuItemCount = 11;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
@@ -193,10 +195,15 @@ class Game {
 
     this.track = null;
     this.player = null;
+    this.player2 = null;
     this.aiBikes = [];
     this.collision = null;
     this.bestLapRecords = this._loadBestLapRecords();
     this.isHistoricalRecord = false;
+    this._isSplitScreen = false;
+    this.selectedVehicleP2 = 'thunder';
+    this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
+    this._splitscreenResultData = null;
 
     this.raceEditor = null;
     this.replaySystem = null;
@@ -212,12 +219,20 @@ class Game {
     this.lastTime = 0;
     this.running = false;
     this._prevPlayerLap = 0;
+    this._prevPlayer2Lap = 0;
     this._prevCollisionCount = 0;
     this._prevWasOffTrack = false;
     this._prevWasDrifting = false;
     this._prevObstacleCollisions = 0;
     this._prevObstaclesDestroyed = 0;
     this._prevPoliceCollisions = 0;
+    this._nitroVibTimerP2 = 0;
+    this._prevDuelCollisions = 0;
+    this._prevDuelTakedowns = 0;
+    this._splitscreenGraceTimer = 0;
+    this._splitscreenGraceActive = false;
+    this._splitscreenGraceDuration = 30000;
+    this._splitscreenMenuCursor = 0;
 
     this._init();
   }
@@ -235,20 +250,46 @@ class Game {
       this.replaySystem = new ReplaySystem(this);
     }
 
+    this._setupRace();
+
+    this._setupTouchControls();
+  }
+
+  _setupRace() {
     const cfg = DifficultySettings[this.difficulty];
     const vehicle = VehicleTypes[this.selectedVehicle];
-    const totalBikes = cfg.aiCount + 1;
+    const baseBikeCount = this._isSplitScreen ? 2 : 1;
+    const totalBikes = cfg.aiCount + baseBikeCount;
     const startPositions = this.track.getStartPositions(totalBikes, 60);
 
     this.player = new Bike(
-      startPositions[cfg.playerGridIndex].x,
-      startPositions[cfg.playerGridIndex].y,
-      startPositions[cfg.playerGridIndex].angle,
+      startPositions[0].x,
+      startPositions[0].y,
+      startPositions[0].angle,
       vehicle.color,
       true
     );
+    this.player.playerIndex = 1;
     this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
+
+    if (this._isSplitScreen) {
+      const vehicleP2 = VehicleTypes[this.selectedVehicleP2];
+      this.player2 = new Bike(
+        startPositions[1].x,
+        startPositions[1].y,
+        startPositions[1].angle,
+        vehicleP2.color,
+        true
+      );
+      this.player2.playerIndex = 2;
+      this._applyVehicleAndDifficulty(this.player2, vehicleP2, cfg);
+      this.garage.applyUpgradesToBike(this.player2, this.selectedVehicleP2);
+    } else {
+      this.player2 = null;
+    }
+
     this.collision.damageMultiplier = cfg.collisionDamage;
+    this.garage.applyUpgradesToBike(this.player, this.selectedVehicle);
 
     this.aiBikes = [];
     this._createAIBikes(startPositions, cfg);
@@ -259,8 +300,10 @@ class Game {
 
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
-
-    this._setupTouchControls();
+    if (this.renderer.camera2) {
+      this.renderer.camera2.x = this.player2 ? this.player2.x : this.player.x;
+      this.renderer.camera2.y = this.player2 ? this.player2.y : this.player.y;
+    }
   }
 
   _applyVehicleAndDifficulty(player, vehicle, cfg) {
@@ -280,23 +323,24 @@ class Game {
   }
 
   _createAIBikes(startPositions, cfg) {
-    const aiColors = ['#ff00ff', '#ff6600', '#00ff66', '#ffff00', '#ff0066'];
+    const aiColors = ['#ff00ff', '#ff6600', '#00ff66', '#ffff00', '#ff0066', '#ff66ff', '#66ff00', '#00ffff'];
     this.aiBikes = [];
 
-    const playerIdx = cfg.playerGridIndex;
+    const skipCount = this._isSplitScreen ? 2 : 1;
     let aiSlot = 0;
 
     for (let i = 0; i < startPositions.length; i++) {
-      if (i === playerIdx) continue;
+      if (i < skipCount) continue;
       if (aiSlot >= cfg.aiCount) break;
 
       const pos = startPositions[i];
+      const diffIdx = aiSlot % (cfg.aiDifficulties ? cfg.aiDifficulties.length : 1);
       const ai = new AIBike(
         pos.x,
         pos.y,
         pos.angle,
         aiColors[aiSlot % aiColors.length],
-        cfg.aiDifficulties[aiSlot]
+        cfg.aiDifficulties ? cfg.aiDifficulties[diffIdx] : 'medium'
       );
       this.aiBikes.push(ai);
       aiSlot++;
@@ -390,6 +434,14 @@ class Game {
         this._handlePauseClick(e);
       } else if (this.state === GameState.FINISHED) {
         this.startGame();
+      } else if (this.state === GameState.SPLITSCREEN_FINISHED) {
+        this.state = GameState.MENU;
+        this.menuCursor = 9;
+        this._isSplitScreen = false;
+        this._splitscreenResultData = null;
+        this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.VEHICLE_SELECT_P2) {
+        this._handleVehicleSelectP2Click(e);
       }
     });
   }
@@ -611,6 +663,7 @@ class Game {
     const itemY7 = itemY6 + itemSpacing;
     const itemY8 = itemY7 + itemSpacing;
     const itemY9 = itemY8 + itemSpacing;
+    const itemY10 = itemY9 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -649,6 +702,9 @@ class Game {
         this.startWantedChase();
       } else if (y >= itemY9 && y < itemY9 + 45) {
         this.menuCursor = 9;
+        this.startSplitScreen();
+      } else if (y >= itemY10 && y < itemY10 + 45) {
+        this.menuCursor = 10;
         this.startGame();
       }
     }
@@ -706,6 +762,9 @@ class Game {
       case GameState.VEHICLE_SELECT:
         this._updateVehicleSelect();
         break;
+      case GameState.VEHICLE_SELECT_P2:
+        this._updateVehicleSelectP2();
+        break;
       case GameState.GARAGE:
         this._updateGarage();
         break;
@@ -744,6 +803,9 @@ class Game {
         break;
       case GameState.FINISHED:
         this._updateFinished();
+        break;
+      case GameState.SPLITSCREEN_FINISHED:
+        this._updateSplitscreenFinished();
         break;
     }
   }
@@ -798,6 +860,10 @@ class Game {
         this.startWantedChase();
       }
     } else if (this.menuCursor === 9) {
+      if (this.input.isMenuConfirm()) {
+        this.startSplitScreen();
+      }
+    } else if (this.menuCursor === 10) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -1130,6 +1196,56 @@ class Game {
     this.touchManager.vibrate('menuSelect');
   }
 
+  _updateVehicleSelectP2() {
+    if (this.input.isMenuUp()) {
+      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 + 1) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuLeft()) {
+      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuRight()) {
+      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 + 1) % VehicleTypeKeys.length;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuConfirm()) {
+      this._confirmVehicleSelectionP2();
+    }
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.menuCursor = 9;
+      this._isSplitScreen = false;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
+  }
+
+  _confirmVehicleSelectionP2() {
+    this.selectedVehicleP2 = VehicleTypeKeys[this.vehicleSelectCursorP2];
+    this._isSplitScreen = true;
+    this._applySettings();
+    this._resetRace();
+
+    this.wantedSystem.reset();
+
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+
+    this._prevStateBeforePause = null;
+    this.state = GameState.COUNTDOWN;
+    this.countdown = 3;
+    this.countdownTimer = 0;
+    this.touchManager.vibrate('menuSelect');
+  }
+
   _updateGarage() {
     const category = GarageCategoryKeys[this.garageCategoryCursor];
     const itemCount = this.garage.getCategoryItemCount(category);
@@ -1288,6 +1404,94 @@ class Game {
     }
 
     return false;
+  }
+
+  _handleVehicleSelectP2Click(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = this.canvas.width / 2;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    const btnH = isPortrait ? 40 * uiScale : 44;
+    const btnY = isPortrait ? this.canvas.height - 75 * uiScale : this.canvas.height - 65;
+    const totalBtnW = isPortrait ? 280 * uiScale : 320;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (totalBtnW - btnGap) / 2;
+    const btnX = centerX - totalBtnW / 2;
+
+    const cancelX = btnX;
+    const confirmX = btnX + btnW + btnGap;
+
+    if (y >= btnY && y <= btnY + btnH) {
+      if (x >= cancelX && x <= cancelX + btnW) {
+        this.state = GameState.MENU;
+        this.menuCursor = 9;
+        this._isSplitScreen = false;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= confirmX && x <= confirmX + btnW) {
+        this._confirmVehicleSelectionP2();
+        return;
+      }
+    }
+
+    let listX, listY, listW, listH;
+    if (isPortrait) {
+      const previewH = 200 * uiScale;
+      const previewY = 70 * uiScale;
+      const previewW = Math.min(340 * uiScale, this.canvas.width * 0.9);
+      listY = previewY + previewH + 15 * uiScale;
+      listH = this.canvas.height - listY - 100 * uiScale;
+      listW = Math.min(360 * uiScale, this.canvas.width * 0.92);
+      listX = centerX - listW / 2;
+    } else {
+      const previewPanelX = 60;
+      const previewPanelW = 380;
+      listX = previewPanelX + previewPanelW + 30;
+      listY = 100;
+      listW = this.canvas.width - listX - 60;
+      listH = this.canvas.height - 180;
+    }
+
+    if (x >= listX && x <= listX + listW && y >= listY && y <= listY + listH) {
+      const itemCount = VehicleTypeKeys.length;
+      const itemGap = isPortrait ? 8 * uiScale : 10;
+      const itemH = isPortrait ? 58 * uiScale : 65;
+      const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+      const startY = listY + 50 + (listH - 60 - totalItemH) / 2;
+
+      for (let i = 0; i < VehicleTypeKeys.length; i++) {
+        const iy = startY + i * (itemH + itemGap);
+        const itemX = listX + 12;
+        const itemW = listW - 24;
+
+        if (x >= itemX && x <= itemX + itemW && y >= iy && y <= iy + itemH) {
+          this.vehicleSelectCursorP2 = i;
+          this.touchManager.vibrate('menuSelect');
+          return;
+        }
+      }
+    }
+
+    let previewX, previewY, previewW, previewH;
+    if (isPortrait) {
+      previewH = 200 * uiScale;
+      previewY = 70 * uiScale;
+      previewW = Math.min(340 * uiScale, this.canvas.width * 0.9);
+      previewX = centerX - previewW / 2;
+    } else {
+      previewX = 60;
+      previewY = 100;
+      previewW = 380;
+      previewH = this.canvas.height - 200;
+    }
+
+    if (x >= previewX && x <= previewX + previewW && y >= previewY && y <= previewY + previewH) {
+      this._confirmVehicleSelectionP2();
+    }
   }
 
   _handleCareerMapClick(e) {
@@ -1635,6 +1839,7 @@ class Game {
 
   startGame() {
     this._isWantedMode = false;
+    this._isSplitScreen = false;
     this._applySettings();
     this._resetRace();
 
@@ -1655,6 +1860,14 @@ class Game {
     this.countdownTimer = 0;
   }
 
+  startSplitScreen() {
+    this._isWantedMode = false;
+    this._isSplitScreen = true;
+    this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
+    this.state = GameState.VEHICLE_SELECT_P2;
+    this.touchManager.vibrate('menuSelect');
+  }
+
   _applySettings() {
     const cfg = DifficultySettings[this.difficulty];
     const vehicle = VehicleTypes[this.selectedVehicle];
@@ -1665,18 +1878,45 @@ class Game {
   _resetRace() {
     const cfg = DifficultySettings[this.difficulty];
     const vehicle = VehicleTypes[this.selectedVehicle];
-    const totalBikes = cfg.aiCount + 1;
+    const baseBikeCount = this._isSplitScreen ? 2 : 1;
+    const totalBikes = cfg.aiCount + baseBikeCount;
     const startPositions = this.track.getStartPositions(totalBikes, 60);
 
     this.player.reset(
-      startPositions[cfg.playerGridIndex].x,
-      startPositions[cfg.playerGridIndex].y,
-      startPositions[cfg.playerGridIndex].angle
+      startPositions[0].x,
+      startPositions[0].y,
+      startPositions[0].angle
     );
     this.player.color = vehicle.color;
+    this.player.playerIndex = 1;
     this._applyVehicleAndDifficulty(this.player, vehicle, cfg);
     this.garage.applyUpgradesToBike(this.player, this.selectedVehicle);
     this.collision.damageMultiplier = cfg.collisionDamage;
+
+    if (this._isSplitScreen) {
+      const vehicleP2 = VehicleTypes[this.selectedVehicleP2];
+      if (!this.player2) {
+        this.player2 = new Bike(
+          startPositions[1].x,
+          startPositions[1].y,
+          startPositions[1].angle,
+          vehicleP2.color,
+          true
+        );
+      } else {
+        this.player2.reset(
+          startPositions[1].x,
+          startPositions[1].y,
+          startPositions[1].angle
+        );
+        this.player2.color = vehicleP2.color;
+      }
+      this.player2.playerIndex = 2;
+      this._applyVehicleAndDifficulty(this.player2, vehicleP2, cfg);
+      this.garage.applyUpgradesToBike(this.player2, this.selectedVehicleP2);
+    } else {
+      this.player2 = null;
+    }
 
     this.aiBikes = [];
     this._createAIBikes(startPositions, cfg);
@@ -1688,6 +1928,7 @@ class Game {
     this.raceTime = 0;
     this.isHistoricalRecord = false;
     this._prevPlayerLap = 0;
+    this._prevPlayer2Lap = 0;
     this._prevCollisionCount = 0;
     this._prevWasOffTrack = false;
     this._prevWasDrifting = false;
@@ -1696,10 +1937,19 @@ class Game {
     this._prevPoliceCollisions = 0;
     this._prevBikeCollisionCount = 0;
     this._nitroVibTimer = 0;
+    this._nitroVibTimerP2 = 0;
+    this._prevDuelCollisions = 0;
+    this._prevDuelTakedowns = 0;
+    this._splitscreenGraceTimer = 0;
+    this._splitscreenGraceActive = false;
     this.track.resetObstacles();
     this.collision.resetObstacleStats();
     this.renderer.camera.x = this.player.x;
     this.renderer.camera.y = this.player.y;
+    if (this._isSplitScreen && this.player2) {
+      this.renderer.camera2.x = this.player2.x;
+      this.renderer.camera2.y = this.player2.y;
+    }
     this.input.reset();
     this.touchManager.reset();
 
@@ -1708,9 +1958,7 @@ class Game {
   }
 
   _updateCountdown(dt) {
-    if (this.input.isPause()) {
-      this.pauseGame();
-      this.input.clearJustPressed();
+    if (this._checkPauseInput()) {
       return;
     }
 
@@ -1737,10 +1985,30 @@ class Game {
     }
   }
 
+  _checkPauseInput() {
+    if (this._isSplitScreen) {
+      if (this.input.isP1Pause()) {
+        this.pauseGame();
+        this.input.clearP1JustPressed();
+        return true;
+      }
+      if (this.input.isP2Pause()) {
+        this.pauseGame();
+        this.input.clearP2JustPressed();
+        return true;
+      }
+    } else {
+      if (this.input.isPause()) {
+        this.pauseGame();
+        this.input.clearJustPressed();
+        return true;
+      }
+    }
+    return false;
+  }
+
   _updateRacing(dt) {
-    if (this.input.isPause()) {
-      this.pauseGame();
-      this.input.clearJustPressed();
+    if (this._checkPauseInput()) {
       return;
     }
 
@@ -1748,58 +2016,11 @@ class Game {
 
     this.weatherSystem.update(dt, 'racing');
 
-    if (!this.player.finished) {
-      this.player.raceTime = this.raceTime;
-    }
-
-    if (this.player.newRecordTimer > 0) {
-      this.player.newRecordTimer -= dt;
-      if (this.player.newRecordTimer <= 0) {
-        this.player.isNewLapRecord = false;
-      }
-    }
-
-    if (this._prevPlayerLap < this.player.lap) {
-      this._prevPlayerLap = this.player.lap;
-      if (this.player.isNewLapRecord) {
-        this.touchManager.vibrate('newRecord');
-      } else {
-        this.touchManager.vibrate('lapComplete');
-      }
-    }
-
-    if (!this.player.prevNitroActive && this.player.nitroActive) {
-      this.touchManager.vibrate('nitroBurst');
-    }
-    if (this.player.nitroActive) {
-      if (!this._nitroVibTimer || this._nitroVibTimer <= 0) {
-        this.touchManager.vibrate('nitroActive');
-        this._nitroVibTimer = 0.15;
-      } else {
-        this._nitroVibTimer -= dt;
-      }
-    } else {
-      this._nitroVibTimer = 0;
-    }
-
-    const playerInput = {
-      accel: this.input.isAccel(),
-      brake: this.input.isBrake(),
-      left: this.input.isLeft(),
-      right: this.input.isRight(),
-      nitro: this.input.isNitro()
-    };
-
-    this.player.update(dt, playerInput, this.track, this.weatherSystem);
-    this.collision.checkTrackCollision(this.player);
-    this.collision.checkObstacleCollision(this.player);
-    this.collision.updateRouteTracking(this.player);
-    this.collision.updateCheckpoints(this.player);
-    this.collision.updateBranchHints(this.player);
-
-    if (this.player.lap >= this.totalLaps && !this.player.finished) {
-      this.player.finished = true;
-      this.player.raceTime = this.raceTime;
+    for (let playerIndex = 1; playerIndex <= (this._isSplitScreen ? 2 : 1); playerIndex++) {
+      const player = playerIndex === 1 ? this.player : this.player2;
+      if (!player) continue;
+      const playerInput = this.input.getPlayerInput(playerIndex);
+      this._updatePlayerBike(dt, player, playerInput, playerIndex);
     }
 
     this.aiBikes.forEach(ai => {
@@ -1826,31 +2047,166 @@ class Game {
     }
     this._prevCollisionCount = collisionCount;
 
-    const playerObsCollisions = this.player.obstacleCollisions || 0;
-    if (playerObsCollisions > this._prevObstacleCollisions) {
-      this.touchManager.vibrate('collision');
-    }
-    this._prevObstacleCollisions = playerObsCollisions;
-
-    const playerObsDestroyed = this.player.obstaclesDestroyed || 0;
-    if (playerObsDestroyed > this._prevObstaclesDestroyed) {
-      this.touchManager.vibrate('newRecord');
-    }
-    this._prevObstaclesDestroyed = playerObsDestroyed;
-
-    if (!this.player.isOnTrack && !this._prevWasOffTrack) {
-      this.touchManager.vibrate('offTrack');
-    }
-    this._prevWasOffTrack = !this.player.isOnTrack;
-
-    if (this.player.driftFactor > 0.5 && !this._prevWasDrifting) {
-      this.touchManager.vibrate('drift');
-    }
-    this._prevWasDrifting = this.player.driftFactor > 0.5;
+    this._updatePlayerCollisionFeedback();
 
     this.collision.checkAllBikeCollisions(this.getAllBikes());
 
-    const allFinished = this.getAllBikes().every(b => b.finished);
+    this._checkRaceFinish();
+
+    if (this._isSplitScreen && this.player2) {
+      this.renderer.updateCameraSplit(this.player, this.player2, dt);
+    } else {
+      this.renderer.updateCamera(this.player, dt);
+    }
+
+    this.achievements.updateNotificationTimer(dt);
+  }
+
+  _updatePlayerBike(dt, player, input, playerIndex) {
+    if (!player || player.finished) return;
+
+    player.raceTime = this.raceTime;
+
+    if (player.newRecordTimer > 0) {
+      player.newRecordTimer -= dt;
+      if (player.newRecordTimer <= 0) {
+        player.isNewLapRecord = false;
+      }
+    }
+
+    const prevLapKey = playerIndex === 1 ? '_prevPlayerLap' : '_prevPlayer2Lap';
+    if (this[prevLapKey] < player.lap) {
+      this[prevLapKey] = player.lap;
+      if (player.isNewLapRecord) {
+        this.touchManager.vibrate('newRecord');
+      } else {
+        this.touchManager.vibrate('lapComplete');
+      }
+    }
+
+    const nitroVibKey = playerIndex === 1 ? '_nitroVibTimer' : '_nitroVibTimerP2';
+    if (!player.prevNitroActive && player.nitroActive) {
+      this.touchManager.vibrate('nitroBurst');
+    }
+    if (player.nitroActive) {
+      if (!this[nitroVibKey] || this[nitroVibKey] <= 0) {
+        this.touchManager.vibrate('nitroActive');
+        this[nitroVibKey] = 0.15;
+      } else {
+        this[nitroVibKey] -= dt;
+      }
+    } else {
+      this[nitroVibKey] = 0;
+    }
+
+    if (this.input.isPlayerNitroJustPressed(playerIndex) && player.nitroEnergy >= player.nitroMaxEnergy && !player.nitroActive) {
+      player.nitroActive = true;
+      player.nitroDuration = 0;
+      player.nitroBurstTimer = 0.4;
+    }
+
+    player.update(dt, input, this.track, this.weatherSystem);
+    this.collision.checkTrackCollision(player);
+    this.collision.checkObstacleCollision(player);
+    this.collision.updateRouteTracking(player);
+    this.collision.updateCheckpoints(player);
+    this.collision.updateBranchHints(player);
+
+    if (player.lap >= this.totalLaps && !player.finished) {
+      player.finished = true;
+      player.raceTime = this.raceTime;
+    }
+  }
+
+  _updatePlayerCollisionFeedback() {
+    const p1ObsCollisions = this.player.obstacleCollisions || 0;
+    const p2ObsCollisions = this.player2 ? (this.player2.obstacleCollisions || 0) : 0;
+    const totalObsCollisions = p1ObsCollisions + p2ObsCollisions;
+
+    if (this._isSplitScreen) {
+      const p1BikeCollisions = this.player.bikeCollisions || 0;
+      const p2BikeCollisions = this.player2 ? (this.player2.bikeCollisions || 0) : 0;
+      const p1DuelCollisions = this.player.duelCollisions || 0;
+      const p2DuelCollisions = this.player2 ? (this.player2.duelCollisions || 0) : 0;
+      const totalDuelCollisions = p1DuelCollisions + p2DuelCollisions;
+
+      if (totalDuelCollisions > (this._prevDuelCollisions || 0)) {
+        this.touchManager.vibrate('collision');
+      }
+      this._prevDuelCollisions = totalDuelCollisions;
+
+      const p1Takedowns = this.player.duelTakedowns || 0;
+      const p2Takedowns = this.player2 ? (this.player2.duelTakedowns || 0) : 0;
+      const totalTakedowns = p1Takedowns + p2Takedowns;
+      if (totalTakedowns > (this._prevDuelTakedowns || 0)) {
+        this.touchManager.vibrate('newRecord');
+      }
+      this._prevDuelTakedowns = totalTakedowns;
+    }
+
+    if (totalObsCollisions > (this._prevObstacleCollisions || 0)) {
+      this.touchManager.vibrate('collision');
+    }
+    this._prevObstacleCollisions = totalObsCollisions;
+
+    const p1ObsDestroyed = this.player.obstaclesDestroyed || 0;
+    const p2ObsDestroyed = this.player2 ? (this.player2.obstaclesDestroyed || 0) : 0;
+    const totalObsDestroyed = p1ObsDestroyed + p2ObsDestroyed;
+
+    if (totalObsDestroyed > (this._prevObstaclesDestroyed || 0)) {
+      this.touchManager.vibrate('newRecord');
+    }
+    this._prevObstaclesDestroyed = totalObsDestroyed;
+
+    const p1OffTrack = !this.player.isOnTrack;
+    const p2OffTrack = this.player2 ? !this.player2.isOnTrack : false;
+    const anyOffTrack = p1OffTrack || p2OffTrack;
+
+    if (anyOffTrack && !this._prevWasOffTrack) {
+      this.touchManager.vibrate('offTrack');
+    }
+    this._prevWasOffTrack = anyOffTrack;
+
+    const p1Drifting = this.player.driftFactor > 0.5;
+    const p2Drifting = this.player2 ? (this.player2.driftFactor > 0.5) : false;
+    const anyDrifting = p1Drifting || p2Drifting;
+
+    if (anyDrifting && !this._prevWasDrifting) {
+      this.touchManager.vibrate('drift');
+    }
+    this._prevWasDrifting = anyDrifting;
+  }
+
+  _checkRaceFinish() {
+    const allBikes = this.getAllBikes();
+    const allFinished = allBikes.every(b => b.finished);
+
+    if (this._isSplitScreen) {
+      const p1Finished = this.player.finished;
+      const p2Finished = this.player2 && this.player2.finished;
+      const anyPlayerFinished = p1Finished || p2Finished;
+      const bothPlayersFinished = p1Finished && p2Finished;
+
+      if (anyPlayerFinished && !this._splitscreenGraceActive && !bothPlayersFinished) {
+        this._splitscreenGraceActive = true;
+        this._splitscreenGraceTimer = this._splitscreenGraceDuration;
+        this._splitscreenFirstFinisher = p1Finished ? 1 : 2;
+      }
+
+      if (this._splitscreenGraceActive) {
+        this._splitscreenGraceTimer -= 16.67;
+        if (bothPlayersFinished || this._splitscreenGraceTimer <= 0 || allFinished) {
+          this._finalizeSplitscreenRace();
+        }
+        return;
+      }
+
+      if (bothPlayersFinished || allFinished) {
+        this._finalizeSplitscreenRace();
+      }
+      return;
+    }
+
     if (allFinished || this.player.finished) {
       if (this.replaySystem && this.replaySystem.getState() === ReplayState.RECORDING) {
         this.replaySystem.stopRecording();
@@ -1860,7 +2216,8 @@ class Game {
       this._processAchievements();
 
       const rankings = this.getRankings();
-      const playerRanking = rankings.find(r => r.bike.isPlayer);
+
+      const playerRanking = rankings.find(r => r.bike.isPlayer && r.bike.playerIndex === 1);
       const finalRank = playerRanking ? playerRanking.rank : rankings.length + 1;
       const finalTime = this.player.raceTime;
       const finalBestLap = this.player.bestLapTime;
@@ -1912,9 +2269,160 @@ class Game {
         this.state = GameState.FINISHED;
       }
     }
+  }
 
-    this.renderer.updateCamera(this.player, dt);
-    this.achievements.updateNotificationTimer(dt);
+  _finalizeSplitscreenRace() {
+    if (this.replaySystem && this.replaySystem.getState() === ReplayState.RECORDING) {
+      this.replaySystem.stopRecording();
+    }
+
+    this._saveBestLapRecord();
+    this._processAchievements();
+
+    const rankings = this.getRankings();
+    this._splitscreenResultData = this._prepareSplitscreenResult(rankings);
+    this.state = GameState.SPLITSCREEN_FINISHED;
+  }
+
+  _prepareSplitscreenResult(rankings) {
+    const p1Info = rankings.find(r => r.bike.playerIndex === 1);
+    const p2Info = rankings.find(r => r.bike.playerIndex === 2);
+    const duelStats = this.collision.getDuelStats();
+
+    const p1 = this.player;
+    const p2 = this.player2;
+
+    const p1Time = p1 ? p1.raceTime : 0;
+    const p2Time = p2 ? p2.raceTime : 0;
+    const timeDelta = Math.abs(p1Time - p2Time);
+
+    const p1BestLap = p1 && p1.bestLapTime < Infinity ? p1.bestLapTime : 0;
+    const p2BestLap = p2 && p2.bestLapTime < Infinity ? p2.bestLapTime : 0;
+
+    const p1Score = this._calculatePlayerScore(p1, p1Info);
+    const p2Score = this._calculatePlayerScore(p2, p2Info);
+
+    const categoryWins = this._calculateCategoryWins(p1, p2, p1Info, p2Info);
+
+    return {
+      player1: {
+        rank: p1Info ? p1Info.rank : -1,
+        time: p1Time,
+        timeFormatted: p1 && p1.finished ? Utils.formatTime(p1Time) : '未完成',
+        bestLap: p1BestLap,
+        bestLapFormatted: p1BestLap > 0 ? Utils.formatTime(p1BestLap) : '--:--:--',
+        vehicle: this.selectedVehicle,
+        vehicleName: VehicleTypes[this.selectedVehicle].name,
+        collisions: p1 ? (p1.bikeCollisions || 0) : 0,
+        obstaclesDestroyed: p1 ? (p1.obstaclesDestroyed || 0) : 0,
+        driftDistance: p1 ? (p1.totalDriftDistance || 0) : 0,
+        nitroTime: p1 ? (p1.totalNitroTime || 0) : 0,
+        duelCollisions: p1 ? (p1.duelCollisions || 0) : 0,
+        duelTakedowns: p1 ? (p1.duelTakedowns || 0) : 0,
+        lapsCompleted: p1 ? Math.min(p1.lap, this.totalLaps) : 0,
+        finished: p1 ? p1.finished : false,
+        score: p1Score
+      },
+      player2: {
+        rank: p2Info ? p2Info.rank : -1,
+        time: p2Time,
+        timeFormatted: p2 && p2.finished ? Utils.formatTime(p2Time) : '未完成',
+        bestLap: p2BestLap,
+        bestLapFormatted: p2BestLap > 0 ? Utils.formatTime(p2BestLap) : '--:--:--',
+        vehicle: this.selectedVehicleP2,
+        vehicleName: VehicleTypes[this.selectedVehicleP2].name,
+        collisions: p2 ? (p2.bikeCollisions || 0) : 0,
+        obstaclesDestroyed: p2 ? (p2.obstaclesDestroyed || 0) : 0,
+        driftDistance: p2 ? (p2.totalDriftDistance || 0) : 0,
+        nitroTime: p2 ? (p2.totalNitroTime || 0) : 0,
+        duelCollisions: p2 ? (p2.duelCollisions || 0) : 0,
+        duelTakedowns: p2 ? (p2.duelTakedowns || 0) : 0,
+        lapsCompleted: p2 ? Math.min(p2.lap, this.totalLaps) : 0,
+        finished: p2 ? p2.finished : false,
+        score: p2Score
+      },
+      rankings: rankings,
+      winner: p1Info && p2Info ? (p1Info.rank < p2Info.rank ? 1 : (p2Info.rank < p1Info.rank ? 2 : 0)) : 0,
+      timeDelta: timeDelta,
+      timeDeltaFormatted: timeDelta > 0 ? Utils.formatTime(timeDelta) : '00:00.000',
+      totalLaps: this.totalLaps,
+      duelStats: duelStats,
+      gracePeriodUsed: this._splitscreenGraceActive,
+      firstFinisher: this._splitscreenFirstFinisher || 0,
+      categoryWins: categoryWins,
+      totalScoreWinner: p1Score > p2Score ? 1 : (p2Score > p1Score ? 2 : 0)
+    };
+  }
+
+  _calculatePlayerScore(player, rankInfo) {
+    if (!player) return 0;
+    let score = 0;
+    const rank = rankInfo ? rankInfo.rank : 99;
+
+    if (player.finished) {
+      score += Math.max(0, (10 - rank) * 100);
+      if (player.raceTime > 0) {
+        score += Math.max(0, Math.floor(500000 / player.raceTime));
+      }
+    }
+
+    if (player.bestLapTime && player.bestLapTime < Infinity) {
+      score += Math.max(0, Math.floor(300000 / player.bestLapTime));
+    }
+
+    score += (player.totalDriftDistance || 0) * 0.5;
+    score += (player.totalNitroTime || 0) * 2;
+    score += (player.obstaclesDestroyed || 0) * 50;
+    score += (player.duelTakedowns || 0) * 200;
+    score -= (player.bikeCollisions || 0) * 30;
+    score -= (player.duelCollisions || 0) * 10;
+
+    return Math.max(0, Math.floor(score));
+  }
+
+  _calculateCategoryWins(p1, p2, p1Info, p2Info) {
+    const wins = {
+      speed: 0,
+      bestLap: 0,
+      drift: 0,
+      nitro: 0,
+      aggression: 0,
+      clean: 0
+    };
+
+    if (!p1 || !p2) return wins;
+
+    const p1Time = p1.finished ? p1.raceTime : Infinity;
+    const p2Time = p2.finished ? p2.raceTime : Infinity;
+    if (p1Time < p2Time) wins.speed = 1;
+    else if (p2Time < p1Time) wins.speed = 2;
+
+    const p1Best = p1.bestLapTime < Infinity ? p1.bestLapTime : Infinity;
+    const p2Best = p2.bestLapTime < Infinity ? p2.bestLapTime : Infinity;
+    if (p1Best < p2Best) wins.bestLap = 1;
+    else if (p2Best < p1Best) wins.bestLap = 2;
+
+    const p1Drift = p1.totalDriftDistance || 0;
+    const p2Drift = p2.totalDriftDistance || 0;
+    if (p1Drift > p2Drift) wins.drift = 1;
+    else if (p2Drift > p1Drift) wins.drift = 2;
+
+    const p1Nitro = p1.totalNitroTime || 0;
+    const p2Nitro = p2.totalNitroTime || 0;
+    if (p1Nitro > p2Nitro) wins.nitro = 1;
+    else if (p2Nitro > p1Nitro) wins.nitro = 2;
+
+    const p1Aggression = (p1.duelTakedowns || 0) * 2 + (p1.obstaclesDestroyed || 0);
+    const p2Aggression = (p2.duelTakedowns || 0) * 2 + (p2.obstaclesDestroyed || 0);
+    if (p1Aggression > p2Aggression) wins.aggression = 1;
+    else if (p2Aggression > p1Aggression) wins.aggression = 2;
+
+    const p1Penalties = (p1.bikeCollisions || 0) + (p1.duelCollisions || 0) * 0.5;
+    const p2Penalties = (p2.bikeCollisions || 0) + (p2.duelCollisions || 0) * 0.5;
+    if (p1Penalties < p2Penalties) wins.clean = 1;
+    else if (p2Penalties < p1Penalties) wins.clean = 2;
+
+    return wins;
   }
 
   startWantedChase() {
@@ -2141,6 +2649,64 @@ class Game {
     }
   }
 
+  _updateSplitscreenFinished() {
+    if (this.input.isMenuUp()) {
+      this._splitscreenMenuCursor = (this._splitscreenMenuCursor - 1 + 3) % 3;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this._splitscreenMenuCursor = (this._splitscreenMenuCursor + 1) % 3;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuConfirm()) {
+      this._executeSplitscreenMenuAction();
+      this.input.clearJustPressed();
+    }
+  }
+
+  _executeSplitscreenMenuAction() {
+    switch (this._splitscreenMenuCursor || 0) {
+      case 0:
+        this._startSplitscreenRematch();
+        break;
+      case 1:
+        this._changeSplitscreenVehicle();
+        break;
+      case 2:
+        this.state = GameState.MENU;
+        this.menuCursor = 9;
+        this._isSplitScreen = false;
+        this._splitscreenResultData = null;
+        this.touchManager.vibrate('menuSelect');
+        break;
+    }
+  }
+
+  _startSplitscreenRematch() {
+    this._isSplitScreen = true;
+    this._splitscreenResultData = null;
+    this._applySettings();
+    this._resetRace();
+    this.wantedSystem.reset();
+    const touchControls = document.getElementById('touchControls');
+    if (touchControls) {
+      touchControls.classList.remove('paused');
+    }
+    this._prevStateBeforePause = null;
+    this.state = GameState.COUNTDOWN;
+    this.countdown = 3;
+    this.countdownTimer = 0;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _changeSplitscreenVehicle() {
+    this._splitscreenResultData = null;
+    this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
+    this.state = GameState.VEHICLE_SELECT_P2;
+    this.touchManager.vibrate('menuSelect');
+  }
+
   _updatePaused() {
     if (this.input.isMenuUp()) {
       this.pauseMenuCursor = (this.pauseMenuCursor - 1 + this.pauseMenuItemCount) % this.pauseMenuItemCount;
@@ -2245,6 +2811,9 @@ class Game {
   }
 
   getAllBikes() {
+    if (this._isSplitScreen && this.player2) {
+      return [this.player, this.player2, ...this.aiBikes];
+    }
     return [this.player, ...this.aiBikes];
   }
 
@@ -2276,6 +2845,11 @@ class Game {
 
     if (this.state === GameState.VEHICLE_SELECT) {
       this.renderer.drawVehicleSelect(this);
+      return;
+    }
+
+    if (this.state === GameState.VEHICLE_SELECT_P2) {
+      this.renderer.drawVehicleSelectP2(this);
       return;
     }
 
@@ -2314,6 +2888,18 @@ class Game {
       return;
     }
 
+    if (this._isSplitScreen && this.player2) {
+      this._renderSplitScreen();
+    } else {
+      this._renderSingleScreen();
+    }
+
+    if (this.state === GameState.SPLITSCREEN_FINISHED) {
+      this.renderer.drawSplitscreenFinished(this);
+    }
+  }
+
+  _renderSingleScreen() {
     this.renderer.beginTransform();
 
     this.renderer.drawTrack(this.track);
@@ -2360,6 +2946,177 @@ class Game {
     } else if (this.state === GameState.FINISHED) {
       this.renderer.drawFinished(this);
     }
+  }
+
+  _renderSplitScreen() {
+    const allBikes = this.getAllBikes();
+    const rankings = this.collision.getRankings(allBikes);
+    const policeBikes = (this.wantedSystem && this.wantedSystem.getPoliceBikes) ? this.wantedSystem.getPoliceBikes() : [];
+
+    for (let playerIndex = 1; playerIndex <= 2; playerIndex++) {
+      const player = playerIndex === 1 ? this.player : this.player2;
+      if (!player) continue;
+
+      this.renderer.beginSplitTransform(playerIndex);
+
+      this.renderer.drawTrack(this.track);
+      this.renderer.drawSkidMarks(this.getAllBikes());
+      this.renderer.drawParticles(this.getAllBikes());
+
+      rankings.forEach(r => {
+        this.renderer.drawBike(r.bike);
+      });
+
+      policeBikes.forEach(police => {
+        this.renderer.drawPoliceBike(police);
+      });
+      this.renderer.drawParticles([...policeBikes]);
+
+      this.renderer.drawNitroBurst(player);
+      this.renderer.drawSpeedLines(player);
+
+      this.renderer.drawWeatherEffects(this.weatherSystem, player);
+
+      this.renderer.endSplitTransform();
+    }
+
+    this._drawSplitScreenDivider();
+
+    if (this.state === GameState.COUNTDOWN) {
+      this.renderer.drawSplitScreenHUD(this);
+      this.renderer.drawWeatherHUD(this);
+      this.renderer.drawCountdown(this.countdown, true);
+    } else if (this.state === GameState.RACING) {
+      this.renderer.drawSplitScreenHUD(this);
+      this.renderer.drawWeatherHUD(this);
+    } else if (this.state === GameState.PAUSED) {
+      this.renderer.drawSplitScreenHUD(this);
+      this.renderer.drawWeatherHUD(this);
+      this.renderer.drawPauseOverlay(this);
+    }
+  }
+
+  _drawSplitScreenDivider() {
+    const ctx = this.renderer.ctx;
+    const layout = this.renderer.getSplitLayout();
+    const isHorizontal = layout.horizontal;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const rankings = this.getRankings();
+    const p1Rank = rankings.find(r => r.bike.playerIndex === 1);
+    const p2Rank = rankings.find(r => r.bike.playerIndex === 2);
+
+    let dividerColor = '#444';
+    let accentColor = '#888';
+    if (p1Rank && p2Rank) {
+      if (p1Rank.rank < p2Rank.rank) {
+        dividerColor = '#00f5ff';
+        accentColor = '#00f5ff';
+      } else if (p2Rank.rank < p1Rank.rank) {
+        dividerColor = '#ff00ff';
+        accentColor = '#ff00ff';
+      } else {
+        dividerColor = '#ffff00';
+        accentColor = '#ffff00';
+      }
+    }
+
+    const t = Date.now() * 0.003;
+    const pulse = Math.sin(t) * 0.15 + 0.85;
+
+    if (isHorizontal) {
+      const y = layout.dividerY;
+
+      const gradient = ctx.createLinearGradient(0, y - 10, 0, y + 10);
+      gradient.addColorStop(0, `${dividerColor}00`);
+      gradient.addColorStop(0.5, dividerColor);
+      gradient.addColorStop(1, `${dividerColor}00`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, y - 10, this.renderer.width, 20);
+
+      ctx.shadowBlur = 12 * pulse;
+      ctx.shadowColor = dividerColor;
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(0, y - 2, this.renderer.width, 4);
+      ctx.shadowBlur = 0;
+
+      const dashLen = 20;
+      const gap = 15;
+      const dashOffset = (Date.now() * 0.05) % (dashLen + gap);
+      ctx.fillStyle = `${accentColor}88`;
+      for (let x = -dashOffset; x < this.renderer.width; x += dashLen + gap) {
+        ctx.fillRect(x, y - 1, dashLen, 2);
+      }
+
+      ctx.fillStyle = accentColor;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = dividerColor;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('◄ P1', 10, y - 10);
+      ctx.textAlign = 'left';
+      ctx.fillText('◄ P2', 10, y + 22);
+
+      ctx.textAlign = 'center';
+      const centerTag = p1Rank && p2Rank ?
+        (p1Rank.rank < p2Rank.rank ? '▼ P1领先' : (p2Rank.rank < p1Rank.rank ? '▼ P2领先' : '▼ 势均力敌')) :
+        '▼ SPLIT SCREEN ▼';
+      ctx.fillStyle = accentColor;
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(centerTag, this.renderer.width / 2, y - 8);
+      ctx.shadowBlur = 0;
+    } else {
+      const x = layout.dividerX;
+
+      const gradient = ctx.createLinearGradient(x - 10, 0, x + 10, 0);
+      gradient.addColorStop(0, `${dividerColor}00`);
+      gradient.addColorStop(0.5, dividerColor);
+      gradient.addColorStop(1, `${dividerColor}00`);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - 10, 0, 20, this.renderer.height);
+
+      ctx.shadowBlur = 12 * pulse;
+      ctx.shadowColor = dividerColor;
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(x - 2, 0, 4, this.renderer.height);
+      ctx.shadowBlur = 0;
+
+      const dashLen = 20;
+      const gap = 15;
+      const dashOffset = (Date.now() * 0.05) % (dashLen + gap);
+      ctx.fillStyle = `${accentColor}88`;
+      for (let y = -dashOffset; y < this.renderer.height; y += dashLen + gap) {
+        ctx.fillRect(x - 1, y, 2, dashLen);
+      }
+
+      ctx.save();
+      ctx.translate(x - 10, this.renderer.height * 0.25);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = accentColor;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = dividerColor;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('P1 ►', 0, 0);
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(x - 10, this.renderer.height * 0.75);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = accentColor;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = dividerColor;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('P2 ►', 0, 0);
+      ctx.restore();
+
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
   }
 
   resize(width, height) {

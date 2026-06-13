@@ -3,6 +3,7 @@ class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.camera = { x: 0, y: 0, scale: 1, targetScale: 1 };
+    this.camera2 = { x: 0, y: 0, scale: 1, targetScale: 1 };
     this.width = canvas.width;
     this.height = canvas.height;
     this.orientation = 'landscape';
@@ -49,11 +50,77 @@ class Renderer {
     this.camera.scale = Utils.lerp(this.camera.scale, this.camera.targetScale, dt * 3);
   }
 
+  updateCameraSplit(player1, player2, dt) {
+    const targetX1 = player1.x;
+    const targetY1 = player1.y;
+
+    this.camera.x = Utils.lerp(this.camera.x, targetX1, dt * 5);
+    this.camera.y = Utils.lerp(this.camera.y, targetY1, dt * 5);
+
+    const speedRatio1 = Math.abs(player1.speed) / player1.maxSpeed;
+    const baseScale = this.isPortrait() ? 0.85 : 0.9;
+    this.camera.targetScale = baseScale - speedRatio1 * 0.08;
+    this.camera.scale = Utils.lerp(this.camera.scale, this.camera.targetScale, dt * 3);
+
+    if (player2) {
+      const targetX2 = player2.x;
+      const targetY2 = player2.y;
+
+      this.camera2.x = Utils.lerp(this.camera2.x, targetX2, dt * 5);
+      this.camera2.y = Utils.lerp(this.camera2.y, targetY2, dt * 5);
+
+      const speedRatio2 = Math.abs(player2.speed) / player2.maxSpeed;
+      this.camera2.targetScale = baseScale - speedRatio2 * 0.08;
+      this.camera2.scale = Utils.lerp(this.camera2.scale, this.camera2.targetScale, dt * 3);
+    }
+  }
+
   beginTransform() {
     this.ctx.save();
     this.ctx.translate(this.width / 2, this.height / 2);
     this.ctx.scale(this.camera.scale, this.camera.scale);
     this.ctx.translate(-this.camera.x, -this.camera.y);
+  }
+
+  getSplitLayout() {
+    const isPortrait = this.isPortrait();
+    return {
+      horizontal: !isPortrait,
+      viewportW: isPortrait ? this.width / 2 : this.width,
+      viewportH: isPortrait ? this.height : this.height / 2,
+      p1OffsetX: 0,
+      p1OffsetY: 0,
+      p2OffsetX: isPortrait ? this.width / 2 : 0,
+      p2OffsetY: isPortrait ? 0 : this.height / 2,
+      dividerX: isPortrait ? this.width / 2 : 0,
+      dividerY: isPortrait ? 0 : this.height / 2,
+      dividerLength: isPortrait ? this.height : this.width
+    };
+  }
+
+  beginSplitTransform(playerIndex) {
+    const camera = playerIndex === 1 ? this.camera : this.camera2;
+    const layout = this.getSplitLayout();
+
+    const viewportX = playerIndex === 1 ? layout.p1OffsetX : layout.p2OffsetX;
+    const viewportY = playerIndex === 1 ? layout.p1OffsetY : layout.p2OffsetY;
+    const viewportW = layout.viewportW;
+    const viewportH = layout.viewportH;
+
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(viewportX, viewportY, viewportW, viewportH);
+    this.ctx.clip();
+
+    this.ctx.save();
+    this.ctx.translate(viewportX + viewportW / 2, viewportY + viewportH / 2);
+    this.ctx.scale(camera.scale, camera.scale);
+    this.ctx.translate(-camera.x, -camera.y);
+  }
+
+  endSplitTransform() {
+    this.ctx.restore();
+    this.ctx.restore();
   }
 
   endTransform() {
@@ -990,19 +1057,41 @@ class Renderer {
     }
   }
 
-  drawNitroScreenOverlay(player) {
+  drawNitroScreenOverlay(player, viewportXOrOffsetY = 0, viewportYOrHeight = 0, viewportW = 0, viewportH = 0) {
     if (!player.nitroActive && player.nitroBurstTimer <= 0) return;
 
     const ctx = this.ctx;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+    let vpX, vpY, vpW, vpH;
+    if (viewportW > 0 || viewportH > 0) {
+      vpX = viewportXOrOffsetY;
+      vpY = viewportYOrHeight;
+      vpW = viewportW;
+      vpH = viewportH;
+    } else if (viewportYOrHeight > 0) {
+      vpX = 0;
+      vpY = viewportXOrOffsetY;
+      vpW = this.width;
+      vpH = viewportYOrHeight;
+    } else {
+      vpX = 0;
+      vpY = 0;
+      vpW = this.width;
+      vpH = this.height;
+    }
+
+    ctx.beginPath();
+    ctx.rect(vpX, vpY, vpW, vpH);
+    ctx.clip();
+
     const nitroIntensity = player.nitroActive ? 1 : Math.max(0, player.nitroBurstTimer / 0.4);
 
     if (player.nitroBurstTimer > 0) {
       const burstAlpha = (player.nitroBurstTimer / 0.4) * 0.35;
       ctx.fillStyle = `rgba(0, 245, 255, ${burstAlpha})`;
-      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.fillRect(vpX, vpY, vpW, vpH);
     }
 
     if (player.nitroActive) {
@@ -1010,14 +1099,14 @@ class Renderer {
       const edgeAlpha = nitroIntensity * pulse;
 
       const gradient = ctx.createRadialGradient(
-        this.width / 2, this.height / 2, Math.min(this.width, this.height) * 0.2,
-        this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.75
+        vpX + vpW / 2, vpY + vpH / 2, Math.min(vpW, vpH) * 0.2,
+        vpX + vpW / 2, vpY + vpH / 2, Math.max(vpW, vpH) * 0.75
       );
       gradient.addColorStop(0, 'rgba(0, 245, 255, 0)');
       gradient.addColorStop(0.7, `rgba(0, 245, 255, ${edgeAlpha * 0.5})`);
       gradient.addColorStop(1, `rgba(0, 245, 255, ${edgeAlpha * 1.5})`);
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.fillRect(vpX, vpY, vpW, vpH);
     }
 
     ctx.restore();
@@ -1838,7 +1927,7 @@ class Renderer {
     }
   }
 
-  _drawNewRecordOverlay(player) {
+  _drawNewRecordOverlay(player, viewportXOrOffsetY = 0, viewportYOrHeight = 0, viewportW = 0, viewportH = 0) {
     const ctx = this.ctx;
     const elapsed = 3.0 - player.newRecordTimer;
     const alpha = Math.max(0, 1 - elapsed * 0.33);
@@ -1846,16 +1935,36 @@ class Renderer {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    const centerX = this.width / 2;
-    const centerY = this.height * 0.28;
+    let vpX, vpY, vpW, vpH;
+    if (viewportW > 0 || viewportH > 0) {
+      vpX = viewportXOrOffsetY;
+      vpY = viewportYOrHeight;
+      vpW = viewportW;
+      vpH = viewportH;
+    } else if (viewportYOrHeight > 0) {
+      vpX = 0;
+      vpY = viewportXOrOffsetY;
+      vpW = this.width;
+      vpH = viewportYOrHeight;
+    } else {
+      vpX = 0;
+      vpY = 0;
+      vpW = this.width;
+      vpH = this.height;
+    }
 
-    const pulseScale = 1 + Math.sin(elapsed * 6) * 0.08;
-    const floatY = Math.sin(elapsed * 3) * 5;
+    const isSplit = (viewportW > 0 || viewportH > 0 || viewportYOrHeight > 0);
+    const centerX = vpX + vpW / 2;
+    const centerY = isSplit ? (vpY + vpH * 0.28) : (this.height * 0.28);
+
+    const scaleBase = (vpW < this.width || vpH < this.height) ? 0.65 : 1.0;
+    const pulseScale = (1 + Math.sin(elapsed * 6) * 0.08) * scaleBase;
+    const floatY = Math.sin(elapsed * 3) * 5 * scaleBase;
 
     ctx.translate(centerX, centerY + floatY);
     ctx.scale(pulseScale, pulseScale);
 
-    const glowSize = 80 + Math.sin(elapsed * 8) * 20;
+    const glowSize = (80 + Math.sin(elapsed * 8) * 20) * scaleBase;
     const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowSize);
     gradient.addColorStop(0, `rgba(255, 255, 0, ${alpha * 0.3})`);
     gradient.addColorStop(1, 'transparent');
@@ -2540,9 +2649,9 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset9, panelW,
-      '开始比赛',
+      '👥 双人对战',
       game.menuCursor === 9, uiScale,
-      '#00ff66'
+      '#ff00ff'
     );
 
     this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset9 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
@@ -6511,5 +6620,1196 @@ class Renderer {
     }
 
     ctx.restore();
+  }
+
+  drawSplitScreenHUD(game) {
+    const ctx = this.ctx;
+    const layout = this.getSplitLayout();
+    const isHorizontal = layout.horizontal;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    this.track = game.track;
+
+    const splitPadding = 8;
+    const splitUiScale = isHorizontal ? 0.55 : 0.48;
+    const splitSpeedW = 140 * splitUiScale;
+    const splitSpeedH = 55 * splitUiScale;
+    const bestLapW = 120 * splitUiScale;
+    const bestLapH = 45 * splitUiScale;
+
+    const rankings = game.getRankings();
+    const p1RankInfo = rankings.find(r => r.bike.playerIndex === 1);
+    const p2RankInfo = rankings.find(r => r.bike.playerIndex === 2);
+
+    const p1 = { x: layout.p1OffsetX, y: layout.p1OffsetY, w: layout.viewportW, h: layout.viewportH };
+    const p2 = { x: layout.p2OffsetX, y: layout.p2OffsetY, w: layout.viewportW, h: layout.viewportH };
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(p1.x, p1.y, p1.w, p1.h);
+    ctx.clip();
+    this._drawSpeedometer(game.player, p1.x + splitPadding, p1.y + p1.h - splitSpeedH - splitPadding, splitUiScale);
+    this.drawNitroHUD(game.player, p1.x + splitPadding, p1.y + p1.h - splitSpeedH - 38 * splitUiScale - splitPadding, splitUiScale);
+    this._drawSplitLapInfo(game.player, game.totalLaps, p1.x + p1.w - 130 * splitUiScale - splitPadding, p1.y + splitPadding, splitUiScale);
+    this._drawSplitTimer(game.raceTime, p1.x + p1.w / 2 - 60 * splitUiScale, p1.y + splitPadding, splitUiScale);
+    this._drawSplitBestLap(game.player, game.raceTime, p1.x + p1.w / 2 - bestLapW / 2, p1.y + splitPadding + 36 * splitUiScale, splitUiScale);
+    this._drawSplitPlayerLabel(1, game.player, p1.x + splitPadding, p1.y + splitPadding, splitUiScale);
+    this._drawSplitRankBadge(p1RankInfo ? p1RankInfo.rank : -1, 1, p1.x + splitPadding + 56 * splitUiScale, p1.y + splitPadding, splitUiScale);
+    this._drawSplitDriftIndicator(game.player, p1.x + p1.w - 130 * splitUiScale - splitPadding, p1.y + splitPadding + 56 * splitUiScale, splitUiScale, 1);
+    this._drawSplitRouteIndicator(game.player, p1.y + p1.h - splitPadding - 30 * splitUiScale, splitUiScale, 1);
+    this._drawSplitCollisionCounter(game.player, 1, p1.x + p1.w - 130 * splitUiScale - splitPadding, p1.y + splitPadding + 80 * splitUiScale, splitUiScale);
+    if (game._isSplitScreen && game.player2) {
+      this._drawSplitDistanceToOpponent(game.player, game.player2, p1RankInfo, p2RankInfo,
+        p1.x + splitPadding, p1.y + p1.h - splitSpeedH - 90 * splitUiScale - splitPadding, splitUiScale, 1);
+    }
+    if (game.player.isNewLapRecord) {
+      this._drawNewRecordOverlay(game.player, p1.x, p1.y, p1.w, p1.h);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(p2.x, p2.y, p2.w, p2.h);
+    ctx.clip();
+    if (game.player2) {
+      this._drawSpeedometer(game.player2, p2.x + splitPadding, p2.y + p2.h - splitSpeedH - splitPadding, splitUiScale);
+      this.drawNitroHUD(game.player2, p2.x + splitPadding, p2.y + p2.h - splitSpeedH - 38 * splitUiScale - splitPadding, splitUiScale);
+      this._drawSplitLapInfo(game.player2, game.totalLaps, p2.x + p2.w - 130 * splitUiScale - splitPadding, p2.y + splitPadding, splitUiScale);
+      this._drawSplitTimer(game.raceTime, p2.x + p2.w / 2 - 60 * splitUiScale, p2.y + splitPadding, splitUiScale);
+      this._drawSplitBestLap(game.player2, game.raceTime, p2.x + p2.w / 2 - bestLapW / 2, p2.y + splitPadding + 36 * splitUiScale, splitUiScale);
+      this._drawSplitPlayerLabel(2, game.player2, p2.x + splitPadding, p2.y + splitPadding, splitUiScale);
+      this._drawSplitRankBadge(p2RankInfo ? p2RankInfo.rank : -1, 2, p2.x + splitPadding + 56 * splitUiScale, p2.y + splitPadding, splitUiScale);
+      this._drawSplitDriftIndicator(game.player2, p2.x + p2.w - 130 * splitUiScale - splitPadding, p2.y + splitPadding + 56 * splitUiScale, splitUiScale, 2);
+      this._drawSplitRouteIndicator(game.player2, p2.y + p2.h - splitPadding - 30 * splitUiScale, splitUiScale, 2);
+      this._drawSplitCollisionCounter(game.player2, 2, p2.x + p2.w - 130 * splitUiScale - splitPadding, p2.y + splitPadding + 80 * splitUiScale, splitUiScale);
+      this._drawSplitDistanceToOpponent(game.player2, game.player, p2RankInfo, p1RankInfo,
+        p2.x + splitPadding, p2.y + p2.h - splitSpeedH - 90 * splitUiScale - splitPadding, splitUiScale, 2);
+      if (game.player2.isNewLapRecord) {
+        this._drawNewRecordOverlay(game.player2, p2.x, p2.y, p2.w, p2.h);
+      }
+    }
+    ctx.restore();
+
+    this._drawSplitRankings(rankings, game.player2 ? 2 : 1);
+
+    if (game.player && game.player2) {
+      this._drawDuelProximityWarning(game.player, game.player2, layout);
+      this._drawLiveDuelStanding(game.player, game.player2, p1RankInfo, p2RankInfo, layout);
+    }
+
+    if (game._splitscreenGraceActive) {
+      this._drawGracePeriodTimer(game, layout);
+    }
+
+    ctx.restore();
+
+    if (game.player) this.drawNitroScreenOverlay(game.player, p1.x, p1.y, p1.w, p1.h);
+    if (game.player2) this.drawNitroScreenOverlay(game.player2, p2.x, p2.y, p2.w, p2.h);
+  }
+
+  _drawSplitRankBadge(rank, playerIndex, x, y, scale) {
+    const ctx = this.ctx;
+    if (rank <= 0) return;
+
+    const w = 42 * scale;
+    const h = 22 * scale;
+    const color = rank === 1 ? '#ffff00' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#888';
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 4 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.shadowBlur = 6 * scale;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 4 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowColor = color;
+    ctx.font = `bold ${11 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+    ctx.fillText(`${medal}#${rank}`, x + w / 2, y + h * 0.72);
+    ctx.shadowBlur = 0;
+  }
+
+  _drawSplitDistanceToOpponent(player, opponent, playerRank, opponentRank, x, y, scale, playerIndex) {
+    const ctx = this.ctx;
+    if (!opponent) return;
+
+    const dist = Utils.distance(player.x, player.y, opponent.x, opponent.y);
+    const isAhead = playerRank && opponentRank ? playerRank.rank < opponentRank.rank : false;
+    const isTied = playerRank && opponentRank ? playerRank.rank === opponentRank.rank : false;
+
+    const w = 140 * scale;
+    const h = 28 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 5 * scale);
+    ctx.fill();
+
+    let statusColor = '#888';
+    let statusText = '';
+    if (isTied) {
+      statusColor = '#ffff00';
+      statusText = '⬌ 并驾齐驱';
+    } else if (isAhead) {
+      statusColor = '#00ff66';
+      statusText = `▲ 领先 ${Math.floor(dist)}m`;
+    } else {
+      statusColor = '#ff6666';
+      statusText = `▼ 落后 ${Math.floor(dist)}m`;
+    }
+
+    ctx.strokeStyle = statusColor;
+    ctx.lineWidth = 1.2 * scale;
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowColor = statusColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 5 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = statusColor;
+    ctx.shadowBlur = 3 * scale;
+    ctx.shadowColor = statusColor;
+    ctx.font = `bold ${10 * scale}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(statusText, x + 8 * scale, y + h * 0.68);
+    ctx.shadowBlur = 0;
+
+    const p1Progress = this.track ? this.track.getRouteProgress(player).distance / this.track.totalLength : 0;
+    const p2Progress = this.track ? this.track.getRouteProgress(opponent).distance / this.track.totalLength : 0;
+    const progressDelta = (p1Progress - p2Progress) * 100;
+    const deltaText = progressDelta >= 0 ? `+${progressDelta.toFixed(1)}%` : `${progressDelta.toFixed(1)}%`;
+    const deltaColor = progressDelta >= 0 ? '#00ff66' : '#ff6666';
+
+    ctx.fillStyle = deltaColor;
+    ctx.font = `${9 * scale}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(deltaText, x + w - 8 * scale, y + h * 0.68);
+  }
+
+  _drawLiveDuelStanding(p1, p2, p1Rank, p2Rank, layout) {
+    const ctx = this.ctx;
+    const isHorizontal = layout.horizontal;
+
+    let barW, barH, barX, barY;
+    if (isHorizontal) {
+      barW = 120;
+      barH = 10;
+      barX = this.width / 2 - barW / 2;
+      barY = layout.dividerY - barH / 2;
+    } else {
+      barW = 10;
+      barH = 120;
+      barX = layout.dividerX - barW / 2;
+      barY = this.height / 2 - barH / 2;
+    }
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    if (isHorizontal) {
+      ctx.roundRect(barX - 4, barY - 18, barW + 8, barH + 28, 6);
+    } else {
+      ctx.roundRect(barX - 18, barY - 4, barW + 28, barH + 8, 6);
+    }
+    ctx.fill();
+
+    const p1Progress = this.track ? ((p1.lap + this.track.getRouteProgress(p1).distance / this.track.totalLength) / (p1.lap + 1)) : 0.5;
+    const p2Progress = this.track ? ((p2.lap + this.track.getRouteProgress(p2).distance / this.track.totalLength) / (p2.lap + 1)) : 0.5;
+
+    const avgProgress = (p1Progress + p2Progress) / 2;
+    const balance = avgProgress > 0 ? ((p1Progress - avgProgress) / avgProgress) * 0.5 + 0.5 : 0.5;
+    const clampedBalance = Utils.clamp(balance, 0.05, 0.95);
+
+    if (isHorizontal) {
+      ctx.fillStyle = 'rgba(0, 245, 255, 0.15)';
+      ctx.fillRect(barX, barY, barW / 2, barH);
+      ctx.fillStyle = 'rgba(255, 0, 255, 0.15)';
+      ctx.fillRect(barX + barW / 2, barY, barW / 2, barH);
+    } else {
+      ctx.fillStyle = 'rgba(0, 245, 255, 0.15)';
+      ctx.fillRect(barX, barY, barW, barH / 2);
+      ctx.fillStyle = 'rgba(255, 0, 255, 0.15)';
+      ctx.fillRect(barX, barY + barH / 2, barW, barH / 2);
+    }
+
+    ctx.fillStyle = '#333';
+    if (isHorizontal) ctx.fillRect(barX, barY, barW, barH);
+    else ctx.fillRect(barX, barY, barW, barH);
+
+    if (isHorizontal) {
+      if (clampedBalance < 0.5) {
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff00ff';
+        ctx.fillRect(barX + barW * clampedBalance, barY, barW * (0.5 - clampedBalance) + barW / 2, barH);
+      } else {
+        ctx.fillStyle = '#00f5ff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#00f5ff';
+        ctx.fillRect(barX, barY, barW * clampedBalance, barH);
+      }
+    } else {
+      if (clampedBalance < 0.5) {
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff00ff';
+        ctx.fillRect(barX, barY + barH * clampedBalance, barW, barH * (0.5 - clampedBalance) + barH / 2);
+      } else {
+        ctx.fillStyle = '#00f5ff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#00f5ff';
+        ctx.fillRect(barX, barY, barW, barH * clampedBalance);
+      }
+    }
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    if (isHorizontal) {
+      ctx.moveTo(barX + barW / 2, barY);
+      ctx.lineTo(barX + barW / 2, barY + barH);
+    } else {
+      ctx.moveTo(barX, barY + barH / 2);
+      ctx.lineTo(barX + barW, barY + barH / 2);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = 'bold 10px monospace';
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#00f5ff';
+    if (isHorizontal) {
+      ctx.textAlign = 'left';
+      ctx.fillText('◄ P1', barX - 4, barY - 5);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText('▲', barX + barW / 2, barY - 5);
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText('P1', barX + barW / 2, barY - 16);
+    }
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = 'bold 10px monospace';
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#ff00ff';
+    if (isHorizontal) {
+      ctx.textAlign = 'right';
+      ctx.fillText('P2 ►', barX + barW + 4, barY - 5);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillText('▼', barX + barW / 2, barY + barH + 12);
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText('P2', barX + barW / 2, barY + barH + 25);
+    }
+    ctx.shadowBlur = 0;
+
+    const rank1 = p1Rank ? p1Rank.rank : -1;
+    const rank2 = p2Rank ? p2Rank.rank : -1;
+    if (rank1 > 0 && rank2 > 0) {
+      ctx.fillStyle = rank1 < rank2 ? '#ffff00' : (rank1 === rank2 ? '#ffff00' : '#888');
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      const text = rank1 < rank2 ? 'P1 LEADS' : (rank2 < rank1 ? 'P2 LEADS' : 'TIED');
+      if (isHorizontal) {
+        ctx.fillText(text, barX + barW / 2, barY + barH + 12);
+      } else {
+        ctx.fillText(text, barX + barW + 22, barY + barH / 2);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawGracePeriodTimer(game, layout) {
+    const ctx = this.ctx;
+    const remaining = Math.max(0, game._splitscreenGraceTimer);
+    const duration = game._splitscreenGraceDuration || 30000;
+    const progress = remaining / duration;
+    const finisher = game._splitscreenFirstFinisher || 0;
+    const color = finisher === 1 ? '#00f5ff' : '#ff00ff';
+    const isHorizontal = layout.horizontal;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    let timerW, timerH, timerX, timerY;
+    if (isHorizontal) {
+      timerW = 280;
+      timerH = 52;
+      timerX = this.width / 2 - timerW / 2;
+      timerY = layout.dividerY - timerH / 2;
+    } else {
+      timerW = 52;
+      timerH = 280;
+      timerX = layout.dividerX - timerW / 2;
+      timerY = this.height / 2 - timerH / 2;
+    }
+
+    const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+
+    ctx.fillStyle = `rgba(10, 10, 26, ${0.85 + pulse * 0.1})`;
+    ctx.beginPath();
+    ctx.roundRect(timerX - 4, timerY - 4, timerW + 8, timerH + 8, 10);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 20 * pulse;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.roundRect(timerX - 4, timerY - 4, timerW + 8, timerH + 8, 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const seconds = Math.ceil(remaining / 1000);
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = color;
+    ctx.textAlign = 'center';
+    if (isHorizontal) {
+      ctx.font = 'bold 26px monospace';
+      ctx.fillText(`⏱ ${seconds}s`, this.width / 2, timerY + 28);
+    } else {
+      ctx.save();
+      ctx.translate(layout.dividerX, this.height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.font = 'bold 26px monospace';
+      ctx.fillText(`⏱ ${seconds}s`, 0, 10);
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+
+    if (isHorizontal) {
+      const barPadX = 12;
+      const barY = timerY + 34;
+      const barH2 = 6;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.fillRect(timerX + barPadX, barY, timerW - barPadX * 2, barH2);
+
+      ctx.fillStyle = color;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = color;
+      ctx.fillRect(timerX + barPadX, barY, (timerW - barPadX * 2) * progress, barH2);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#ccc';
+      ctx.font = '10px monospace';
+      ctx.fillText(`P${finisher} 已冲线 · 等待对手完成`, this.width / 2, timerY - 10);
+    } else {
+      const barPadY = 12;
+      const barX = timerX + 22;
+      const barW2 = 8;
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.fillRect(barX, timerY + barPadY, barW2, timerH - barPadY * 2);
+
+      ctx.fillStyle = color;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = color;
+      const barStart = timerY + barPadY;
+      ctx.fillRect(barX, barStart + (1 - progress) * (timerH - barPadY * 2), barW2, (timerH - barPadY * 2) * progress);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#ccc';
+      ctx.font = '10px monospace';
+      ctx.save();
+      ctx.translate(layout.dividerX + 38, this.height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText(`P${finisher} 已冲线 · 等待对手完成`, 0, -6);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  _drawSplitCollisionCounter(player, playerIndex, x, y, scale) {
+    const ctx = this.ctx;
+    const collisions = player.bikeCollisions || 0;
+    const w = 80 * scale;
+    const h = 20 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 3 * scale);
+    ctx.fill();
+
+    const color = collisions === 0 ? '#00ff66' : collisions < 3 ? '#ffaa00' : '#ff3300';
+    ctx.fillStyle = color;
+    ctx.font = `${9 * scale}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('⚡', x + 4 * scale, y + h * 0.75);
+    ctx.fillText(`${collisions}`, x + 16 * scale, y + h * 0.75);
+  }
+
+  _drawDuelProximityWarning(player1, player2, layout) {
+    const ctx = this.ctx;
+    const dist = Utils.distance(player1.x, player1.y, player2.x, player2.y);
+
+    if (dist < 200) {
+      const intensity = 1 - (dist / 200);
+      const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+      const alpha = intensity * 0.25 * pulse;
+      const isHorizontal = layout.horizontal;
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      ctx.fillStyle = `rgba(255, 0, 100, ${alpha})`;
+      if (isHorizontal) {
+        ctx.fillRect(0, 0, this.width, 3);
+        ctx.fillRect(0, this.height - 3, this.width, 3);
+      } else {
+        ctx.fillRect(0, 0, 3, this.height);
+        ctx.fillRect(this.width - 3, 0, 3, this.height);
+      }
+
+      if (dist < 80) {
+        ctx.fillStyle = `rgba(255, 0, 100, ${alpha * 1.5})`;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff0066';
+        const labelY = isHorizontal ? (this.height / 2 + 30) : (layout.dividerX + 40);
+        const labelX = isHorizontal ? this.width / 2 : (this.width / 2);
+        if (!isHorizontal) {
+          ctx.save();
+          ctx.translate(labelX, layout.dividerX + 30);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText('DUEL!', 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText('DUEL!', labelX, labelY);
+        }
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.restore();
+    }
+  }
+
+  _drawSplitPlayerLabel(playerIndex, player, x, y, scale) {
+    const ctx = this.ctx;
+    const label = playerIndex === 1 ? 'P1' : 'P2';
+    const color = playerIndex === 1 ? '#00f5ff' : '#ff00ff';
+    const w = 48 * scale;
+    const h = 22 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 4 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 * scale;
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 4 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 4 * scale;
+    ctx.shadowColor = color;
+    ctx.font = `bold ${12 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x + w / 2, y + h * 0.75);
+    ctx.shadowBlur = 0;
+  }
+
+  _drawSplitLapInfo(player, totalLaps, x, y, scale) {
+    const ctx = this.ctx;
+    const displayLap = Math.min(player.lap + 1, totalLaps);
+    const currentRoute = this.track ? this.track.getRoute(player.currentRouteId) : null;
+    const numCheckpoints = currentRoute ? currentRoute.checkpoints.length : 6;
+
+    const w = 120 * scale;
+    const h = 48 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.shadowBlur = 6 * scale;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${13 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`LAP ${displayLap}/${totalLaps}`, x + w / 2, y + h * 0.45);
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${9 * scale}px monospace`;
+    ctx.fillText(`CP:${player.checkpoint + 1}/${numCheckpoints}`, x + w / 2, y + h * 0.72);
+  }
+
+  _drawSplitTimer(time, x, y, scale) {
+    const ctx = this.ctx;
+    const w = 120 * scale;
+    const h = 30 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.shadowBlur = 6 * scale;
+    ctx.shadowColor = '#ffff00';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffff00';
+    ctx.font = `bold ${14 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(Utils.formatTime(time), x + w / 2, y + h * 0.72);
+  }
+
+  _drawSplitBestLap(player, raceTime, x, y, scale) {
+    const ctx = this.ctx;
+    const w = 120 * scale;
+    const h = 28 * scale;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#00ff66';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.shadowBlur = 6 * scale;
+    ctx.shadowColor = '#00ff66';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6 * scale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00ff66';
+    ctx.font = `${8 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('BEST', x + w / 2, y + h * 0.38);
+
+    const bestTime = player.bestLapTime < Infinity ? Utils.formatTime(player.bestLapTime) : '--:--:--';
+    ctx.fillStyle = '#00ff66';
+    ctx.font = `bold ${10 * scale}px monospace`;
+    ctx.fillText(bestTime, x + w / 2, y + h * 0.78);
+  }
+
+  _drawSplitRankings(rankings, playerCount) {
+    const ctx = this.ctx;
+    const halfH = this.height / 2;
+    const scale = 0.5;
+    const x = this.width - 110 * scale - 8;
+    const w = 110 * scale;
+    const itemH = 18 * scale;
+
+    for (let pi = 0; pi < playerCount; pi++) {
+      const baseY = pi === 0 ? 8 : halfH + 8;
+      const h = 24 * scale + Math.min(rankings.length, 5) * itemH;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(x, baseY, w, h, 6 * scale);
+      ctx.fill();
+
+      ctx.strokeStyle = pi === 0 ? '#00f5ff' : '#ff00ff';
+      ctx.lineWidth = 1.5 * scale;
+      ctx.shadowBlur = 6 * scale;
+      ctx.shadowColor = pi === 0 ? '#00f5ff' : '#ff00ff';
+      ctx.beginPath();
+      ctx.roundRect(x, baseY, w, h, 6 * scale);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${10 * scale}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText('排名', x + 8 * scale, baseY + 16 * scale);
+
+      const visible = rankings.slice(0, 5);
+      visible.forEach((r, i) => {
+        const bike = r.bike;
+        const ry = baseY + 24 * scale + i * itemH;
+        const isP1 = bike.isPlayer && bike.playerIndex === 1;
+        const isP2 = bike.isPlayer && bike.playerIndex === 2;
+
+        ctx.fillStyle = isP1 ? '#00f5ff' : isP2 ? '#ff00ff' : '#888';
+        ctx.font = `${9 * scale}px monospace`;
+        ctx.fillText(`${i + 1}.`, x + 8 * scale, ry);
+
+        ctx.fillStyle = bike.color;
+        ctx.fillRect(x + 26 * scale, ry - 6 * scale, 6 * scale, 6 * scale);
+
+        ctx.fillStyle = isP1 ? 'P1' : isP2 ? 'P2' : '#aaa';
+        ctx.font = `${8 * scale}px monospace`;
+        ctx.fillText(isP1 ? 'P1' : isP2 ? 'P2' : `AI`, x + 38 * scale, ry);
+      });
+    }
+  }
+
+  drawSplitscreenFinished(game) {
+    const ctx = this.ctx;
+    const data = game._splitscreenResultData;
+    if (!data) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.96)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+
+    const panelW = isPortrait ? Math.min(380 * uiScale, this.width * 0.94) : Math.min(780, this.width * 0.94);
+    const panelH = isPortrait ? 680 * uiScale : 600;
+    const panelX = (this.width - panelW) / 2;
+    const panelY = Math.max(10, (this.height - panelH) / 2);
+
+    const p1Color = '#00f5ff';
+    const p2Color = '#ff00ff';
+    const winBorderColor = data.winner === 1 ? p1Color : data.winner === 2 ? p2Color : '#ffff00';
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.96)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 16);
+    ctx.fill();
+
+    ctx.strokeStyle = winBorderColor;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = winBorderColor;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 16);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const grad = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY);
+    grad.addColorStop(0, `${p1Color}25`);
+    grad.addColorStop(0.5, 'transparent');
+    grad.addColorStop(1, `${p2Color}25`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(panelX, panelY, panelW, isPortrait ? 90 * uiScale : 80);
+
+    const titleSize = isPortrait ? 24 * uiScale : 30;
+    ctx.fillStyle = winBorderColor;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = winBorderColor;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('DUEL RESULT', this.width / 2, panelY + (isPortrait ? 38 * uiScale : 42));
+    ctx.shadowBlur = 0;
+
+    const subtitleSize = isPortrait ? 16 * uiScale : 20;
+    if (data.winner === 0) {
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffff00';
+      ctx.font = `bold ${subtitleSize}px monospace`;
+      ctx.fillText('⚡ DRAW ⚡', this.width / 2, panelY + (isPortrait ? 68 * uiScale : 70));
+      ctx.shadowBlur = 0;
+    } else {
+      const winColor = data.winner === 1 ? p1Color : p2Color;
+      ctx.fillStyle = winColor;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = winColor;
+      ctx.font = `bold ${subtitleSize}px monospace`;
+      ctx.fillText(`🏆 PLAYER ${data.winner} WINS! 🏆`, this.width / 2, panelY + (isPortrait ? 68 * uiScale : 70));
+      ctx.shadowBlur = 0;
+    }
+
+    if (data.gracePeriodUsed) {
+      const hintSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = '#ffaa00';
+      ctx.font = `${hintSize}px monospace`;
+      const firstFinisherText = data.firstFinisher ? ` P${data.firstFinisher}率先冲线` : '';
+      ctx.fillText(`[宽限模式]${firstFinisherText} | 差距: ${data.timeDeltaFormatted}`, this.width / 2, panelY + (isPortrait ? 86 * uiScale : 88));
+    }
+
+    const contentStartY = panelY + (isPortrait ? 100 * uiScale : 95);
+    const menuHeight = isPortrait ? 130 * uiScale : 110;
+    const contentEndY = panelY + panelH - menuHeight;
+
+    if (isPortrait) {
+      this._drawSplitResultVertical(ctx, panelX + 16 * uiScale, contentStartY, panelW - 32 * uiScale, contentEndY - contentStartY, data, p1Color, p2Color);
+    } else {
+      this._drawSplitResultHorizontal(ctx, panelX + 20, contentStartY, panelW - 40, contentEndY - contentStartY, data, p1Color, p2Color);
+    }
+
+    const menuY = contentEndY + (isPortrait ? 10 * uiScale : 10);
+    this._drawSplitscreenFinishedMenu(ctx, panelX + 20, menuY, panelW - 40, menuHeight - 20, game);
+
+    ctx.restore();
+  }
+
+  _drawSplitResultHorizontal(ctx, x, y, w, h, data, p1Color, p2Color) {
+    const colW = (w - 50) / 2;
+    const p1ColX = x;
+    const p2ColX = x + w - colW;
+
+    this._drawPlayerResultCard(ctx, p1ColX, y, colW, h, 'P1', data.player1, p1Color, 1, data);
+
+    const dividerX = x + w / 2;
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(dividerX, y);
+    ctx.lineTo(dividerX, y + h - 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const vsY = y + 30;
+    ctx.fillStyle = '#555';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#ff0066';
+    ctx.font = 'bold 26px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', dividerX, vsY);
+    ctx.shadowBlur = 0;
+
+    this._drawPlayerResultCard(ctx, p2ColX, y, colW, h, 'P2', data.player2, p2Color, 2, data);
+
+    const duelY = y + h - 40;
+    this._drawDuelSummary(ctx, x, duelY, w, 40, data, p1Color, p2Color);
+  }
+
+  _drawSplitResultVertical(ctx, x, y, w, h, data, p1Color, p2Color) {
+    const cardH = (h - 80) / 2;
+
+    this._drawPlayerResultCard(ctx, x, y, w, cardH, 'P1', data.player1, p1Color, 1, data);
+
+    const vsY = y + cardH + 15;
+    ctx.fillStyle = '#555';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff0066';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('═ VS ═', x + w / 2, vsY);
+    ctx.shadowBlur = 0;
+
+    this._drawPlayerResultCard(ctx, x, vsY + 25, w, cardH, 'P2', data.player2, p2Color, 2, data);
+
+    const duelY = y + cardH * 2 + 60;
+    this._drawDuelSummary(ctx, x, duelY, w, h - (cardH * 2 + 80), data, p1Color, p2Color);
+  }
+
+  _drawPlayerResultCard(ctx, x, y, w, h, label, pd, color, playerIndex, data) {
+    const vehicle = VehicleTypes[pd.vehicle];
+    const catWins = data.categoryWins || {};
+
+    const isWinner = data.winner === playerIndex;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const scale = isPortrait ? uiScale : 1;
+
+    ctx.fillStyle = color;
+    ctx.shadowBlur = isWinner ? 15 : 8;
+    ctx.shadowColor = color;
+    ctx.font = `bold ${16 * scale}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${label} - ${pd.vehicleName}`, x + 10, y + 20 * scale);
+    ctx.shadowBlur = 0;
+
+    if (isWinner) {
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffff00';
+      ctx.font = `bold ${12 * scale}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText('👑 WINNER', x + w - 10, y + 20 * scale);
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.fillStyle = '#888';
+      ctx.font = `bold ${12 * scale}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`#${pd.rank}`, x + w - 10, y + 20 * scale);
+    }
+
+    const bgColor = isWinner ? `${color}18` : 'rgba(25, 25, 45, 0.6)';
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(x, y + 28 * scale, w, h - 30 * scale, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = isWinner ? 6 : 3;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.roundRect(x, y + 28 * scale, w, h - 30 * scale, 8);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const statRows = [
+      { label: '总用时', pd: pd.timeFormatted, p1Cat: 'speed', vColor: '#ffff00' },
+      { label: '最佳圈', pd: pd.bestLapFormatted, p1Cat: 'bestLap', vColor: '#00ff66' },
+      { label: '完成圈', pd: `${pd.lapsCompleted}/${data.totalLaps}`, p1Cat: null, vColor: '#fff' },
+      { label: '碰撞', pd: `${pd.collisions}次`, p1Cat: 'clean', vColor: pd.collisions === 0 ? '#00ff66' : '#ff6600' },
+      { label: '对抗碰撞', pd: `${pd.duelCollisions}次`, p1Cat: null, vColor: pd.duelCollisions === 0 ? '#888' : '#ff00aa' },
+      { label: '撞飞对手', pd: `${pd.duelTakedowns}次`, p1Cat: 'aggression', vColor: '#ff6600' },
+      { label: '摧毁障碍', pd: `${pd.obstaclesDestroyed}`, p1Cat: 'aggression', vColor: '#ffaa00' },
+      { label: '漂移距离', pd: `${Math.floor(pd.driftDistance)}m`, p1Cat: 'drift', vColor: '#ff00ff' },
+      { label: '氮气时长', pd: `${pd.nitroTime.toFixed(1)}s`, p1Cat: 'nitro', vColor: '#00f5ff' },
+      { label: '综合得分', pd: `${pd.score.toLocaleString()}`, p1Cat: null, vColor: data.totalScoreWinner === playerIndex ? '#ffff00' : '#ffffff', isBold: true }
+    ];
+
+    const rows = Math.min(statRows.length, Math.floor((h - 40 * scale) / (18 * scale)));
+    const rowH = (h - 40 * scale) / rows;
+    let infoY = y + 48 * scale;
+
+    for (let i = 0; i < rows; i++) {
+      const row = statRows[i];
+      if (!row) break;
+
+      ctx.fillStyle = '#777';
+      ctx.font = `${10 * scale}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(row.label, x + 12, infoY + 6 * scale);
+
+      let suffix = '';
+      if (row.p1Cat && catWins[row.p1Cat] === playerIndex) suffix = ' ★';
+      else if (row.p1Cat && catWins[row.p1Cat] !== 0 && catWins[row.p1Cat] !== undefined) suffix = '';
+      else if (row.p1Cat && catWins[row.p1Cat] === 0) suffix = ' =';
+
+      ctx.fillStyle = row.vColor;
+      ctx.font = `bold ${row.isBold ? 13 : 11}${' '}${scale}px monospace`;
+      ctx.shadowBlur = row.isBold ? 6 : 0;
+      ctx.shadowColor = row.vColor;
+      ctx.textAlign = 'right';
+      ctx.fillText(row.pd + suffix, x + w - 12, infoY + 6 * scale);
+      ctx.shadowBlur = 0;
+
+      infoY += rowH;
+    }
+  }
+
+  _drawDuelSummary(ctx, x, y, w, h, data, p1Color, p2Color) {
+    const duelStats = data.duelStats || {};
+    const totalDuel = duelStats.totalDuelCollisions || 0;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const scale = isPortrait ? uiScale : 1;
+
+    ctx.fillStyle = 'rgba(255, 100, 50, 0.06)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h - 5 * scale, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 100, 50, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h - 5 * scale, 6);
+    ctx.stroke();
+
+    const summaryText = [];
+    summaryText.push(`🔥 对抗碰撞: ${totalDuel}`);
+
+    const p1Wins = Object.values(data.categoryWins || {}).filter(v => v === 1).length;
+    const p2Wins = Object.values(data.categoryWins || {}).filter(v => v === 2).length;
+    summaryText.push(`📊 数据维度 P1:${p1Wins}胜 / P2:${p2Wins}胜`);
+
+    if (data.totalScoreWinner !== 0) {
+      summaryText.push(`⭐ 综合评分 P${data.totalScoreWinner}领先`);
+    }
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${11 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    summaryText.forEach((txt, i) => {
+      const lineY = y + (i + 1) * (h / (summaryText.length + 0.5));
+      ctx.fillText(txt, x + w / 2, lineY);
+    });
+  }
+
+  _drawSplitscreenFinishedMenu(ctx, x, y, w, h, game) {
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const scale = isPortrait ? uiScale : 1;
+    const cursor = game._splitscreenMenuCursor || 0;
+
+    const items = [
+      { label: '🔄 再来一局', color: '#00ff66' },
+      { label: '🚗 更换车型', color: '#ffff00' },
+      { label: '🏠 返回菜单', color: '#ff6666' }
+    ];
+
+    const itemCount = items.length;
+    const spacing = isPortrait ? 8 * uiScale : 12;
+    const itemW = isPortrait ? w : (w - spacing * (itemCount - 1)) / itemCount;
+    const itemH = isPortrait ? (h - spacing * (itemCount - 1)) / itemCount : h;
+    const layoutHorizontal = !isPortrait;
+
+    for (let i = 0; i < itemCount; i++) {
+      const item = items[i];
+      const ix = layoutHorizontal ? x + i * (itemW + spacing) : x;
+      const iy = layoutHorizontal ? y : y + i * (itemH + spacing);
+      const isSelected = i === cursor;
+
+      ctx.fillStyle = isSelected ? `${item.color}20` : 'rgba(40, 40, 60, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, itemW, itemH, 8);
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected ? item.color : 'rgba(100, 100, 150, 0.3)';
+      ctx.lineWidth = isSelected ? 2 : 1;
+      ctx.shadowBlur = isSelected ? 12 : 0;
+      ctx.shadowColor = item.color;
+      ctx.beginPath();
+      ctx.roundRect(ix, iy, itemW, itemH, 8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = isSelected ? item.color : '#ccc';
+      ctx.shadowBlur = isSelected ? 6 : 0;
+      ctx.shadowColor = item.color;
+      ctx.font = `bold ${14 * scale}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.label, ix + itemW / 2, iy + itemH / 2);
+      ctx.shadowBlur = 0;
+      ctx.textBaseline = 'alphabetic';
+
+      if (isSelected) {
+        ctx.fillStyle = item.color;
+        ctx.font = `${11 * scale}px monospace`;
+        ctx.fillText('◀ 确认 ▶', ix + itemW / 2, iy + itemH + (layoutHorizontal ? 0 : -4));
+      }
+    }
+
+    const hintY = layoutHorizontal ? y + h + 18 : y + h + 8;
+    const blink = Math.sin(Date.now() * 0.004) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(136, 136, 136, ${blink})`;
+    ctx.font = `${11 * scale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓选择  空格/回车确认  ESC返回', x + w / 2, hintY);
+  }
+
+  drawVehicleSelectP2(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    this._drawVehicleSelectBackground();
+
+    const titleY = isPortrait ? 35 * uiScale : 45;
+    const titleSize = isPortrait ? 26 * uiScale : 32;
+    const subtitleSize = isPortrait ? 11 * uiScale : 14;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('P2 车辆选择', centerX, titleY);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText('← → 切换  空格/回车 确认  ESC 返回', centerX, titleY + (isPortrait ? 22 * uiScale : 28));
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `${subtitleSize}px monospace`;
+    ctx.fillText('P1: WASD+Shift/Q  |  P2: 方向键+Enter//', centerX, titleY + (isPortrait ? 38 * uiScale : 48));
+
+    const selectedKey = VehicleTypeKeys[game.vehicleSelectCursorP2];
+    const selectedVehicle = VehicleTypes[selectedKey];
+    const isCurrentVehicle = selectedKey === game.selectedVehicleP2;
+
+    if (isPortrait) {
+      this._drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+    } else {
+      this._drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+    }
+
+    ctx.restore();
+  }
+
+  _drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+    const previewPanelX = 60;
+    const previewPanelY = 100;
+    const previewPanelW = 380;
+    const previewPanelH = this.height - 180;
+
+    const listPanelX = previewPanelX + previewPanelW + 30;
+    const listPanelY = 100;
+    const listPanelW = this.width - listPanelX - 60;
+    const listPanelH = this.height - 180;
+
+    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle);
+    this._drawVehicleListPanelP2(listPanelX, listPanelY, listPanelW, listPanelH, game, selectedKey);
+    this._drawActionButtonsP2(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey);
+  }
+
+  _drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+    const previewH = 200 * uiScale;
+    const previewY = 70 * uiScale;
+    const previewW = Math.min(340 * uiScale, this.width * 0.9);
+    const previewX = centerX - previewW / 2;
+
+    const listY = previewY + previewH + 15 * uiScale;
+    const listH = this.height - listY - 100 * uiScale;
+    const listW = Math.min(360 * uiScale, this.width * 0.92);
+    const listX = centerX - listW / 2;
+
+    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle);
+    this._drawVehicleListPanelP2(listX, listY, listW, listH, game, selectedKey);
+    this._drawActionButtonsP2(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey);
+  }
+
+  _drawVehicleListPanelP2(x, y, w, h, game, selectedKey) {
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    ctx.stroke();
+
+    const titleSize = isPortrait ? 14 * uiScale : 16;
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('P2 车型列表', x + 18, y + 30);
+
+    const itemCount = VehicleTypeKeys.length;
+    const itemGap = isPortrait ? 8 * uiScale : 10;
+    const itemH = isPortrait ? 58 * uiScale : 65;
+    const totalItemH = itemCount * itemH + (itemCount - 1) * itemGap;
+    const startY = y + 50 + (h - 60 - totalItemH) / 2;
+
+    VehicleTypeKeys.forEach((key, idx) => {
+      const vehicle = VehicleTypes[key];
+      const iy = startY + idx * (itemH + itemGap);
+      const isSelected = key === selectedKey;
+      const isCurrent = key === game.selectedVehicleP2;
+
+      if (isSelected) {
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.08)';
+        ctx.beginPath();
+        ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
+        ctx.fill();
+
+        ctx.strokeStyle = vehicle.color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = vehicle.color;
+        ctx.beginPath();
+        ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const thumbSize = itemH * 0.6;
+      const thumbX = x + 25 + thumbSize / 2;
+      const thumbY = iy + itemH / 2;
+      const thumbScale = thumbSize / 50;
+      this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+
+      const nameX = x + 50 + thumbSize;
+      const nameSize = isPortrait ? 14 * uiScale : 16;
+      const subSize = isPortrait ? 10 * uiScale : 11;
+
+      ctx.fillStyle = vehicle.color;
+      ctx.shadowBlur = isSelected ? 8 : 0;
+      ctx.shadowColor = vehicle.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(vehicle.name, nameX, iy + itemH * 0.4);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#777';
+      ctx.font = `${subSize}px monospace`;
+      ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+
+      if (isCurrent) {
+        const badgeW = 44;
+        const badgeH = 16;
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(x + w - badgeW - 20, iy + itemH / 2 - badgeH / 2, badgeW, badgeH, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x + w - badgeW - 20, iy + itemH / 2 - badgeH / 2, badgeW, badgeH, 4);
+        ctx.stroke();
+        ctx.fillStyle = '#ff00ff';
+        ctx.font = `bold 9px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText('P2', x + w - badgeW / 2 - 20, iy + itemH / 2 + 3);
+      }
+    });
+
+    const hintSize = isPortrait ? 9 * uiScale : 10;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('↑↓ 或 点击选择P2车辆', x + w / 2, y + h - 15);
+  }
+
+  _drawActionButtonsP2(x, y, w, game, selectedVehicle, selectedKey) {
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const btnH = isPortrait ? 40 * uiScale : 44;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (w - btnGap) / 2;
+
+    const cancelX = x;
+    const confirmX = x + btnW + btnGap;
+
+    this._drawVehicleButton(cancelX, y, btnW, btnH, '返回', '#666', '#444', false);
+    this._drawVehicleButton(confirmX, y, btnW, btnH, 'P2确认', selectedVehicle.color, selectedVehicle.accentColor, true);
+
+    const hintSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('ESC 返回  |  空格/回车 P2确认', x + w / 2, y + btnH + 18);
   }
 }
