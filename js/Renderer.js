@@ -5953,4 +5953,563 @@ class Renderer {
 
     ctx.restore();
   }
+
+  drawWeatherEffects(weatherSystem, player) {
+    if (!weatherSystem) return;
+
+    const config = weatherSystem.getConfig();
+    const seasonConfig = weatherSystem.getCurrentSeasonConfig();
+
+    this._drawRaindrops(weatherSystem);
+    this._drawFogLayer(weatherSystem, player);
+    this._drawSeasonTint(seasonConfig, config);
+    this._drawLightningFlash(weatherSystem);
+    this._drawWetSurfaceReflections(weatherSystem, player);
+  }
+
+  _drawRaindrops(weatherSystem) {
+    const ctx = this.ctx;
+    const raindrops = weatherSystem.getRaindrops();
+    const config = weatherSystem.getConfig();
+
+    if (raindrops.length === 0) return;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+
+    raindrops.forEach(drop => {
+      const endX = drop.x + Math.cos(Math.atan2(drop.vy, drop.vx)) * drop.length;
+      const endY = drop.y + Math.sin(Math.atan2(drop.vy, drop.vx)) * drop.length;
+
+      ctx.strokeStyle = `rgba(150, 200, 255, ${drop.alpha * 0.7})`;
+      ctx.lineWidth = 1 + config.rainIntensity * 1.5;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = 'rgba(100, 180, 255, 0.5)';
+
+      ctx.beginPath();
+      ctx.moveTo(drop.x, drop.y);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+    });
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  _drawFogLayer(weatherSystem, player) {
+    const ctx = this.ctx;
+    const fogDensity = weatherSystem.getFogDensity();
+    const fogParticles = weatherSystem.getFogParticles();
+    const config = weatherSystem.getConfig();
+
+    if (fogDensity <= 0 && fogParticles.length === 0) return;
+
+    ctx.save();
+
+    if (fogParticles.length > 0) {
+      fogParticles.forEach(fog => {
+        const gradient = ctx.createRadialGradient(fog.x, fog.y, 0, fog.x, fog.y, fog.size);
+        gradient.addColorStop(0, `rgba(200, 210, 220, ${fog.alpha * 0.5})`);
+        gradient.addColorStop(0.5, `rgba(180, 190, 200, ${fog.alpha * 0.3})`);
+        gradient.addColorStop(1, 'rgba(180, 190, 200, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(fog.x, fog.y, fog.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    if (fogDensity > 0.05) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      const visibility = weatherSystem.getVisibility();
+      const screenW = this.width;
+      const screenH = this.height;
+      const playerDist = player ? Math.abs(player.speed) / 100 : 0;
+
+      const fogGradient = ctx.createRadialGradient(
+        screenW / 2, screenH / 2, Math.min(screenW, screenH) * 0.1 * visibility,
+        screenW / 2, screenH / 2, Math.max(screenW, screenH) * 0.6
+      );
+
+      const baseAlpha = fogDensity * 0.5;
+      const movingAlpha = Math.min(playerDist * 0.05, 0.15);
+      const totalAlpha = Math.min(baseAlpha + movingAlpha, 0.6);
+
+      fogGradient.addColorStop(0, `rgba(200, 210, 220, 0)`);
+      fogGradient.addColorStop(0.3, `rgba(200, 210, 220, ${totalAlpha * 0.3})`);
+      fogGradient.addColorStop(0.6, `rgba(190, 200, 210, ${totalAlpha * 0.7})`);
+      fogGradient.addColorStop(1, `rgba(180, 190, 200, ${totalAlpha})`);
+
+      ctx.fillStyle = fogGradient;
+      ctx.fillRect(0, 0, screenW, screenH);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  _drawSeasonTint(seasonConfig, weatherConfig) {
+    if (!seasonConfig || !seasonConfig.ambientTint) return;
+    const ctx = this.ctx;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const skyBrightness = weatherConfig.skyBrightness || 1.0;
+    const darknessTint = `rgba(0, 0, 20, ${(1 - skyBrightness) * 0.3})`;
+
+    if (seasonConfig.ambientTint) {
+      ctx.fillStyle = seasonConfig.ambientTint;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    if (skyBrightness < 1.0) {
+      ctx.fillStyle = darknessTint;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    ctx.restore();
+  }
+
+  _drawLightningFlash(weatherSystem) {
+    const flash = weatherSystem.getLightningFlash();
+    if (flash <= 0) return;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const intensity = flash;
+    const flicker = 0.8 + Math.random() * 0.2;
+
+    ctx.fillStyle = `rgba(200, 220, 255, ${intensity * 0.4 * flicker})`;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const vignetteGradient = ctx.createRadialGradient(
+      this.width / 2, this.height / 2, 0,
+      this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.7
+    );
+    vignetteGradient.addColorStop(0, `rgba(255, 255, 255, 0)`);
+    vignetteGradient.addColorStop(1, `rgba(255, 255, 255, ${intensity * 0.2})`);
+    ctx.fillStyle = vignetteGradient;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.restore();
+  }
+
+  _drawWetSurfaceReflections(weatherSystem, player) {
+    const wetness = weatherSystem.getWetness();
+    if (wetness < 0.15 || !player) return;
+
+    const ctx = this.ctx;
+    const config = weatherSystem.getConfig();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const rearX = player.x - Math.cos(player.angle) * player.wheelBase * 0.7;
+    const rearY = player.y - Math.sin(player.angle) * player.wheelBase * 0.7;
+
+    const sprayCount = Math.floor(wetness * Math.abs(player.speed) / 15);
+    for (let i = 0; i < sprayCount; i++) {
+      const angle = player.angle + Math.PI + Utils.randomRange(-0.7, 0.7);
+      const speed = Utils.randomRange(40, 100) * wetness;
+      const dist = Utils.randomRange(5, 40);
+      const x = rearX + Math.cos(player.angle + Utils.randomRange(-0.4, 0.4)) * dist;
+      const y = rearY + Math.sin(player.angle + Utils.randomRange(-0.4, 0.4)) * dist;
+      const size = Utils.randomRange(2, 6);
+      const alpha = Utils.randomRange(0.1, 0.4) * wetness;
+
+      ctx.fillStyle = `rgba(180, 210, 255, ${alpha})`;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = 'rgba(150, 200, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
+  drawWeatherHUD(game) {
+    if (!game.weatherSystem) return;
+
+    const ctx = this.ctx;
+    const weatherSystem = game.weatherSystem;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const padding = isPortrait ? 12 : 18;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const config = weatherSystem.getConfig();
+    const seasonConfig = weatherSystem.getCurrentSeasonConfig();
+    const diffLabel = weatherSystem.getWeatherDifficultyLabel();
+    const transitioning = weatherSystem.isTransitioning();
+    const targetConfig = WeatherConfig[weatherSystem.getTargetWeather()];
+
+    const panelW = isPortrait ? 150 * uiScale : 180;
+    const panelH = isPortrait ? 110 * uiScale : 130;
+    const panelX = isPortrait ? this.width - padding - panelW : this.width - padding - panelW;
+    const panelY = isPortrait ? padding + 100 * uiScale : padding + 165;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 10 * uiScale);
+    ctx.fill();
+
+    const seasonColor = seasonConfig.color || '#00f5ff';
+    ctx.strokeStyle = seasonColor;
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = seasonColor;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 10 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const iconSize = isPortrait ? 20 * uiScale : 24;
+    ctx.font = `${iconSize}px serif`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = seasonColor;
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = seasonColor;
+    ctx.fillText(seasonConfig.icon || '', panelX + 10 * uiScale, panelY + 24 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const seasonNameSize = isPortrait ? 11 * uiScale : 12;
+    ctx.fillStyle = seasonColor;
+    ctx.font = `bold ${seasonNameSize}px monospace`;
+    ctx.fillText(seasonConfig.name || '', panelX + 34 * uiScale, panelY + 24 * uiScale);
+
+    const weatherIconSize = isPortrait ? 22 * uiScale : 26;
+    ctx.font = `${weatherIconSize}px serif`;
+    ctx.fillStyle = config.color;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = config.color;
+    ctx.fillText(config.icon, panelX + 10 * uiScale, panelY + 52 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const weatherNameSize = isPortrait ? 12 * uiScale : 13;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${weatherNameSize}px monospace`;
+    ctx.fillText(config.name, panelX + 38 * uiScale, panelY + 52 * uiScale);
+
+    const infoSize = isPortrait ? 9 * uiScale : 10;
+    ctx.font = `${infoSize}px monospace`;
+
+    const gripPct = Math.round(weatherSystem.getGripMultiplier() * 100);
+    const gripColor = gripPct >= 85 ? '#00ff66' : gripPct >= 65 ? '#ffff00' : gripPct >= 45 ? '#ff8800' : '#ff0044';
+    ctx.fillStyle = '#888';
+    ctx.fillText('抓地力', panelX + 10 * uiScale, panelY + 72 * uiScale);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = gripColor;
+    ctx.fillText(`${gripPct}%`, panelX + panelW - 10 * uiScale, panelY + 72 * uiScale);
+
+    const visPct = Math.round(weatherSystem.getVisibility() * 100);
+    const visColor = visPct >= 80 ? '#00ff66' : visPct >= 55 ? '#ffff00' : visPct >= 35 ? '#ff8800' : '#ff0044';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#888';
+    ctx.fillText('能见度', panelX + 10 * uiScale, panelY + 88 * uiScale);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = visColor;
+    ctx.fillText(`${visPct}%`, panelX + panelW - 10 * uiScale, panelY + 88 * uiScale);
+
+    const diffSize = isPortrait ? 10 * uiScale : 11;
+    ctx.font = `bold ${diffSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#666';
+    ctx.fillText('难度', panelX + 10 * uiScale, panelY + 106 * uiScale);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = diffLabel.color;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = diffLabel.color;
+    ctx.fillText(diffLabel.label, panelX + panelW - 10 * uiScale, panelY + 106 * uiScale);
+    ctx.shadowBlur = 0;
+
+    if (transitioning && targetConfig) {
+      const transitionY = panelY + panelH + 6 * uiScale;
+      const transitionH = isPortrait ? 22 * uiScale : 26;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(panelX, transitionY, panelW, transitionH, 6 * uiScale);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#ff8800';
+      ctx.beginPath();
+      ctx.roundRect(panelX, transitionY, panelW, transitionH, 6 * uiScale);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      const tSize = isPortrait ? 9 * uiScale : 10;
+      ctx.font = `${tSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ff8800';
+      ctx.fillText(`→ ${targetConfig.name}`, panelX + 8 * uiScale, transitionY + 15 * uiScale);
+
+      const progress = weatherSystem.getTransitionProgress();
+      const barX = panelX + panelW * 0.45;
+      const barW = panelW * 0.5 - 12 * uiScale;
+      const barH = isPortrait ? 4 * uiScale : 5;
+      const barY = transitionY + (transitionH - barH) / 2;
+
+      ctx.fillStyle = '#333';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#ff8800';
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = '#ff8800';
+      ctx.fillRect(barX, barY, barW * progress, barH);
+      ctx.shadowBlur = 0;
+    }
+
+    const coinMult = weatherSystem.getCoinMultiplier();
+    if (coinMult > 1.05) {
+      const bonusY = panelY - (isPortrait ? 24 * uiScale : 28);
+      const bonusH = isPortrait ? 20 * uiScale : 24;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(panelX, bonusY, panelW, bonusH, 6 * uiScale);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#ffff00';
+      ctx.beginPath();
+      ctx.roundRect(panelX, bonusY, panelW, bonusH, 6 * uiScale);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      const bSize = isPortrait ? 10 * uiScale : 11;
+      ctx.font = `bold ${bSize}px monospace`;
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'center';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#ffff00';
+      ctx.fillText(`💰 +${Math.round((coinMult - 1) * 100)}% 金币奖励`, panelX + panelW / 2, bonusY + 15 * uiScale);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+  drawCareerEventDetail(game) {
+    const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const centerX = this.width / 2;
+
+    const stage = game.career.getStage(game.careerStageCursor);
+    const event = stage ? stage.events[game.careerEventCursor] : null;
+    if (!stage || !event) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, this.width * 0.92) : 520;
+    const panelH = isPortrait ? 460 * uiScale : 440;
+    const panelX = centerX - panelW / 2;
+    const panelY = (this.height - panelH) / 2;
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 14 * uiScale);
+    ctx.fill();
+
+    const stageColor = stage.color || '#00f5ff';
+    ctx.strokeStyle = stageColor;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = stageColor;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 14 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const titleSize = isPortrait ? 20 * uiScale : 22;
+    const subSize = isPortrait ? 12 * uiScale : 13;
+    const infoSize = isPortrait ? 11 * uiScale : 12;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = stageColor;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = stageColor;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.fillText(event.name, centerX, panelY + 38 * uiScale);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${subSize}px monospace`;
+    ctx.fillText(event.description, centerX, panelY + 60 * uiScale);
+
+    const seasonConfig = SeasonConfigs[stage.season] || SeasonConfigs.spring;
+    const weatherInfo = event.weather;
+    const weatherCfg = weatherInfo ? WeatherConfig[weatherInfo] : null;
+    const dynWeather = event.dynamicWeather !== false;
+
+    const infoAreaY = panelY + 85 * uiScale;
+    const infoH = isPortrait ? 200 * uiScale : 180;
+
+    const sectionTitleSize = isPortrait ? 12 * uiScale : 13;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aaa';
+    ctx.font = `bold ${sectionTitleSize}px monospace`;
+    ctx.fillText('赛事信息', panelX + 20 * uiScale, infoAreaY + 10 * uiScale);
+
+    const infoItems = [
+      { label: '难度', value: DifficultySettings[event.difficulty].label, color: DifficultySettings[event.difficulty].color },
+      { label: '圈数', value: `${event.laps} 圈`, color: '#00f5ff' },
+      { label: '基础奖金', value: `💰 ${event.reward}`, color: '#ffff00' },
+      { label: '赛季', value: `${seasonConfig.icon || ''} ${seasonConfig.name}`, color: seasonConfig.color },
+    ];
+
+    const itemYStart = infoAreaY + 35 * uiScale;
+    const itemSpacing = isPortrait ? 24 * uiScale : 26;
+
+    infoItems.forEach((item, i) => {
+      const iy = itemYStart + i * itemSpacing;
+      ctx.fillStyle = '#666';
+      ctx.font = `${infoSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, panelX + 24 * uiScale, iy);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = item.color;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = item.color;
+      ctx.font = `bold ${infoSize}px monospace`;
+      ctx.fillText(item.value, panelX + panelW - 24 * uiScale, iy);
+      ctx.shadowBlur = 0;
+    });
+
+    const weatherSectionY = infoAreaY + infoH - 20 * uiScale;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aaa';
+    ctx.font = `bold ${sectionTitleSize}px monospace`;
+    ctx.fillText('天气状况', panelX + 20 * uiScale, weatherSectionY);
+
+    const wItems = [];
+    if (weatherCfg) {
+      wItems.push({ label: '指定天气', value: `${weatherCfg.icon} ${weatherCfg.name}`, color: weatherCfg.color });
+    } else {
+      wItems.push({ label: '初始天气', value: `随机 (${seasonConfig.typicalWeathers.map(w => WeatherConfig[w].icon).join('')})`, color: '#888' });
+    }
+    wItems.push({ label: '动态变化', value: dynWeather ? '✅ 开启' : '❌ 关闭', color: dynWeather ? '#00ff66' : '#ff6600' });
+
+    if (seasonConfig.tireRecommendation) {
+      wItems.push({ label: '推荐胎', value: seasonConfig.tireRecommendation, color: '#00f5ff' });
+    }
+
+    const wItemStart = weatherSectionY + 25 * uiScale;
+    wItems.forEach((item, i) => {
+      const iy = wItemStart + i * itemSpacing;
+      ctx.fillStyle = '#666';
+      ctx.font = `${infoSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, panelX + 24 * uiScale, iy);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = item.color;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = item.color;
+      ctx.font = `bold ${infoSize}px monospace`;
+      ctx.fillText(item.value, panelX + panelW - 24 * uiScale, iy);
+      ctx.shadowBlur = 0;
+    });
+
+    const bonusDesc = [];
+    if (seasonConfig.coinBonus > 1.0) bonusDesc.push(`💰+${Math.round((seasonConfig.coinBonus - 1) * 100)}%`);
+    if (seasonConfig.scoreBonus > 1.0) bonusDesc.push(`🏆+${Math.round((seasonConfig.scoreBonus - 1) * 100)}%`);
+    if (seasonConfig.xpBonus > 0) bonusDesc.push(`⭐+${seasonConfig.xpBonus}`);
+
+    if (bonusDesc.length > 0) {
+      const bonusY = panelY + panelH - 80 * uiScale;
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.08)';
+      ctx.beginPath();
+      ctx.roundRect(panelX + 16 * uiScale, bonusY - 18 * uiScale, panelW - 32 * uiScale, 30 * uiScale, 6 * uiScale);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(panelX + 16 * uiScale, bonusY - 18 * uiScale, panelW - 32 * uiScale, 30 * uiScale, 6 * uiScale);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'center';
+      ctx.font = `bold ${infoSize}px monospace`;
+      ctx.fillText(`赛季加成: ${bonusDesc.join('  ')}`, centerX, bonusY + 2 * uiScale);
+    }
+
+    const btnH = isPortrait ? 48 * uiScale : 52;
+    const btnY = panelY + panelH - btnH - 16 * uiScale;
+    const totalBtnW = isPortrait ? 280 * uiScale : 320;
+    const btnGap = isPortrait ? 12 * uiScale : 16;
+    const btnW = (totalBtnW - btnGap) / 2;
+    const btnX = centerX - totalBtnW / 2;
+
+    const cancelX = btnX;
+    const startX = btnX + btnW + btnGap;
+    const isUnlocked = game.career.isEventUnlocked(event.id);
+
+    ctx.fillStyle = 'rgba(50, 50, 70, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(cancelX, btnY, btnW, btnH, 10 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cancelX, btnY, btnW, btnH, 10 * uiScale);
+    ctx.stroke();
+    ctx.fillStyle = '#aaa';
+    ctx.font = `bold ${btnH * 0.32}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('返回', cancelX + btnW / 2, btnY + btnH * 0.62);
+
+    if (isUnlocked) {
+      ctx.fillStyle = 'rgba(0, 255, 100, 0.15)';
+      ctx.beginPath();
+      ctx.roundRect(startX, btnY, btnW, btnH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#00ff66';
+      ctx.beginPath();
+      ctx.roundRect(startX, btnY, btnW, btnH, 10 * uiScale);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#00ff66';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#00ff66';
+      ctx.font = `bold ${btnH * 0.32}px monospace`;
+      ctx.fillText('🏁 开始比赛', startX + btnW / 2, btnY + btnH * 0.62);
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.fillStyle = 'rgba(40, 40, 50, 0.9)';
+      ctx.beginPath();
+      ctx.roundRect(startX, btnY, btnW, btnH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(startX, btnY, btnW, btnH, 10 * uiScale);
+      ctx.stroke();
+      ctx.fillStyle = '#555';
+      ctx.font = `bold ${btnH * 0.28}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🔒 未解锁', startX + btnW / 2, btnY + btnH * 0.62);
+    }
+
+    ctx.restore();
+  }
 }

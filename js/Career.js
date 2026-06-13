@@ -68,6 +68,9 @@ const CareerStages = [
     bgColor: '#004455',
     description: '欢迎来到极速霓虹！在这里学习基础驾驶技巧。',
     reward: 1000,
+    season: 'spring',
+    dynamicWeather: true,
+    defaultWeather: 'clear',
     events: [
       {
         id: 'event1_1',
@@ -76,7 +79,9 @@ const CareerStages = [
         laps: 1,
         reward: 200,
         description: '熟悉赛道和操控',
-        unlockRequirement: null
+        unlockRequirement: null,
+        weather: 'clear',
+        dynamicWeather: false
       },
       {
         id: 'event1_2',
@@ -85,7 +90,9 @@ const CareerStages = [
         laps: 2,
         reward: 300,
         description: '学习弯道技巧',
-        unlockRequirement: 'event1_1'
+        unlockRequirement: 'event1_1',
+        weather: 'cloudy',
+        dynamicWeather: false
       },
       {
         id: 'event1_3',
@@ -94,7 +101,9 @@ const CareerStages = [
         laps: 3,
         reward: 500,
         description: '第一个正式比赛',
-        unlockRequirement: 'event1_2'
+        unlockRequirement: 'event1_2',
+        weather: null,
+        dynamicWeather: true
       }
     ]
   },
@@ -106,6 +115,9 @@ const CareerStages = [
     bgColor: '#440044',
     description: '霓虹都市的街道竞速，考验你的反应力。',
     reward: 2000,
+    season: 'summer',
+    dynamicWeather: true,
+    defaultWeather: 'clear',
     events: [
       {
         id: 'event2_1',
@@ -114,7 +126,9 @@ const CareerStages = [
         laps: 2,
         reward: 400,
         description: '适应城市赛道',
-        unlockRequirement: 'event1_3'
+        unlockRequirement: 'event1_3',
+        weather: 'clear',
+        dynamicWeather: false
       },
       {
         id: 'event2_2',
@@ -123,7 +137,9 @@ const CareerStages = [
         laps: 3,
         reward: 500,
         description: '与AI对手竞速',
-        unlockRequirement: 'event2_1'
+        unlockRequirement: 'event2_1',
+        weather: 'cloudy',
+        dynamicWeather: true
       },
       {
         id: 'event2_3',
@@ -132,7 +148,9 @@ const CareerStages = [
         laps: 3,
         reward: 600,
         description: '考验漂移技巧',
-        unlockRequirement: 'event2_2'
+        unlockRequirement: 'event2_2',
+        weather: 'light_rain',
+        dynamicWeather: true
       },
       {
         id: 'event2_4',
@@ -141,7 +159,9 @@ const CareerStages = [
         laps: 5,
         reward: 1000,
         description: '城市阶段最终赛',
-        unlockRequirement: 'event2_3'
+        unlockRequirement: 'event2_3',
+        weather: 'thunderstorm',
+        dynamicWeather: true
       }
     ]
   },
@@ -153,6 +173,9 @@ const CareerStages = [
     bgColor: '#444400',
     description: '高速赛道上的极速对决，速度就是一切！',
     reward: 3500,
+    season: 'autumn',
+    dynamicWeather: true,
+    defaultWeather: 'cloudy',
     events: [
       {
         id: 'event3_1',
@@ -161,7 +184,9 @@ const CareerStages = [
         laps: 3,
         reward: 700,
         description: '进入高速领域',
-        unlockRequirement: 'event2_4'
+        unlockRequirement: 'event2_4',
+        weather: 'foggy',
+        dynamicWeather: false
       },
       {
         id: 'event3_2',
@@ -170,7 +195,9 @@ const CareerStages = [
         laps: 4,
         reward: 800,
         description: '考验极速性能',
-        unlockRequirement: 'event3_1'
+        unlockRequirement: 'event3_1',
+        weather: 'cloudy',
+        dynamicWeather: true
       },
       {
         id: 'event3_3',
@@ -179,7 +206,9 @@ const CareerStages = [
         laps: 4,
         reward: 900,
         description: '氮气使用技巧',
-        unlockRequirement: 'event3_2'
+        unlockRequirement: 'event3_2',
+        weather: 'light_rain',
+        dynamicWeather: true
       },
       {
         id: 'event3_4',
@@ -188,7 +217,9 @@ const CareerStages = [
         laps: 7,
         reward: 1500,
         description: '高速阶段最终赛',
-        unlockRequirement: 'event3_3'
+        unlockRequirement: 'event3_3',
+        weather: 'moderate_rain',
+        dynamicWeather: true
       }
     ]
   },
@@ -200,6 +231,9 @@ const CareerStages = [
     bgColor: '#442200',
     description: '成为传奇车神的最终考验，你准备好了吗？',
     reward: 5000,
+    season: 'winter',
+    dynamicWeather: true,
+    defaultWeather: 'heavy_rain',
     events: [
       {
         id: 'event4_1',
@@ -208,7 +242,9 @@ const CareerStages = [
         laps: 3,
         reward: 1000,
         description: '地狱难度开始',
-        unlockRequirement: 'event3_4'
+        unlockRequirement: 'event3_4',
+        weather: 'foggy',
+        dynamicWeather: true
       },
       {
         id: 'event4_2',
@@ -217,7 +253,9 @@ const CareerStages = [
         laps: 5,
         reward: 1200,
         description: '突破极限',
-        unlockRequirement: 'event4_1'
+        unlockRequirement: 'event4_1',
+        weather: 'heavy_rain',
+        dynamicWeather: true
       },
       {
         id: 'event4_3',
@@ -226,7 +264,9 @@ const CareerStages = [
         laps: 7,
         reward: 1500,
         description: '向冠军进发',
-        unlockRequirement: 'event4_2'
+        unlockRequirement: 'event4_2',
+        weather: 'moderate_rain',
+        dynamicWeather: true
       },
       {
         id: 'event4_4',
@@ -235,7 +275,9 @@ const CareerStages = [
         laps: 10,
         reward: 3000,
         description: '最终决战！成为传奇！',
-        unlockRequirement: 'event4_3'
+        unlockRequirement: 'event4_3',
+        weather: 'thunderstorm',
+        dynamicWeather: true
       }
     ]
   }
@@ -418,44 +460,83 @@ class CareerManager {
     });
   }
 
-  processRaceResult(eventId, rank, time, bestLap, totalLaps) {
+  processRaceResult(eventId, rank, time, bestLap, totalLaps, weatherSummary = null) {
     const result = this.getEventById(eventId);
     if (!result) return { coinsEarned: 0, isNewBest: false };
 
     const event = result.event;
     const multiplier = PrizeMultipliers[rank] || 0.1;
-    const coinsEarned = Math.floor(event.reward * multiplier);
+    let coinsEarned = Math.floor(event.reward * multiplier);
+
+    let correctedTime = time;
+    let adjustedBestLap = bestLap;
+    let weatherBonusInfo = null;
+
+    if (weatherSummary) {
+      const lapTimeCorrection = weatherSummary.lapTimeCorrection || 1.0;
+      if (lapTimeCorrection > 1.0) {
+        correctedTime = time / lapTimeCorrection;
+        if (bestLap && bestLap < Infinity) {
+          adjustedBestLap = bestLap / lapTimeCorrection;
+        }
+      }
+
+      const weatherCoinMult = weatherSummary.coinMultiplier || 1.0;
+      if (weatherCoinMult > 1.0) {
+        coinsEarned = Math.floor(coinsEarned * weatherCoinMult);
+      }
+
+      const seasonConfig = SeasonConfigs[weatherSummary.season] || null;
+      weatherBonusInfo = {
+        difficultyRating: weatherSummary.difficultyRating || 0,
+        coinMultiplier: weatherCoinMult,
+        scoreMultiplier: weatherSummary.scoreMultiplier || 1.0,
+        lapTimeCorrection: lapTimeCorrection,
+        xpBonus: weatherSummary.xpBonus || 0,
+        seasonName: seasonConfig ? seasonConfig.name : null,
+        seasonIcon: seasonConfig ? seasonConfig.icon : null,
+        weatherTypes: weatherSummary.weatherTypes || [],
+        avgGrip: weatherSummary.avgGrip || 1.0,
+        avgVisibility: weatherSummary.avgVisibility || 1.0,
+        peakRain: weatherSummary.peakRain || 0,
+        peakFog: weatherSummary.peakFog || 0
+      };
+    }
 
     this.coins += coinsEarned;
 
     const prevResult = this.eventResults[eventId];
-    const isNewBest = !prevResult || time < prevResult.time;
+    const isNewBest = !prevResult || correctedTime < prevResult.time;
 
     if (isNewBest) {
       this.eventResults[eventId] = {
         rank: rank,
-        time: time,
-        bestLap: bestLap,
+        time: correctedTime,
+        bestLap: adjustedBestLap,
         totalLaps: totalLaps || event.laps,
-        date: Date.now()
+        date: Date.now(),
+        weatherInfo: weatherBonusInfo
       };
     }
 
     this.lastRaceResult = {
       eventId: eventId,
       rank: rank,
-      time: time,
-      bestLap: bestLap,
+      time: correctedTime,
+      rawTime: time,
+      bestLap: adjustedBestLap,
+      rawBestLap: bestLap,
       coinsEarned: coinsEarned,
       isNewBest: isNewBest,
-      totalLaps: totalLaps || event.laps
+      totalLaps: totalLaps || event.laps,
+      weatherInfo: weatherBonusInfo
     };
 
     this._checkStageCompletion(result.stage);
 
     this._saveProgress();
 
-    return { coinsEarned, isNewBest };
+    return { coinsEarned, isNewBest, correctedTime, adjustedBestLap, weatherInfo: weatherBonusInfo };
   }
 
   _checkStageCompletion(stage) {

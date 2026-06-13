@@ -207,6 +207,8 @@ class Game {
     this._isWantedMode = false;
     this._wantedResultData = null;
 
+    this.weatherSystem = null;
+
     this.lastTime = 0;
     this.running = false;
     this._prevPlayerLap = 0;
@@ -224,6 +226,7 @@ class Game {
     this.track = new Track(200);
     this.collision = new Collision(this.track);
     this.wantedSystem = new WantedSystem(this.track);
+    this.weatherSystem = new WeatherSystem();
 
     if (!this.raceEditor) {
       this.raceEditor = new RaceEditor(this.canvas, this);
@@ -926,6 +929,7 @@ class Game {
     if (!selected) return;
 
     const event = selected.event;
+    const stage = selected.stage;
     this.difficulty = event.difficulty;
     const laps = event.laps;
 
@@ -935,6 +939,11 @@ class Game {
     this.totalLaps = laps;
     this.lapIndex = LapOptions.indexOf(laps);
     if (this.lapIndex < 0) this.lapIndex = 1;
+
+    const seasonId = stage.season || 'spring';
+    const forceWeather = event.weather || null;
+    const dynamicEnabled = event.dynamicWeather !== false;
+    this.weatherSystem.startRaceWeatherSetup(seasonId, forceWeather, dynamicEnabled);
 
     const touchControls = document.getElementById('touchControls');
     if (touchControls) {
@@ -1693,6 +1702,9 @@ class Game {
     this.renderer.camera.y = this.player.y;
     this.input.reset();
     this.touchManager.reset();
+
+    this._updateSeason();
+    this.weatherSystem.reset();
   }
 
   _updateCountdown(dt) {
@@ -1733,6 +1745,8 @@ class Game {
     }
 
     this.raceTime += dt * 1000;
+
+    this.weatherSystem.update(dt, 'racing');
 
     if (!this.player.finished) {
       this.player.raceTime = this.raceTime;
@@ -1776,7 +1790,7 @@ class Game {
       nitro: this.input.isNitro()
     };
 
-    this.player.update(dt, playerInput, this.track);
+    this.player.update(dt, playerInput, this.track, this.weatherSystem);
     this.collision.checkTrackCollision(this.player);
     this.collision.checkObstacleCollision(this.player);
     this.collision.updateRouteTracking(this.player);
@@ -1792,7 +1806,7 @@ class Game {
       if (!ai.finished) {
         ai.raceTime = this.raceTime;
       }
-      ai.update(dt, this.track, this.getAllBikes());
+      ai.update(dt, this.track, this.getAllBikes(), this.weatherSystem);
       this.collision.checkTrackCollision(ai);
       this.collision.checkObstacleCollision(ai);
       this.collision.updateRouteTracking(ai);
@@ -1857,31 +1871,48 @@ class Game {
         bestLap: finalBestLap,
         totalLaps: this.totalLaps,
         difficulty: this.difficulty,
-        vehicleType: this.selectedVehicle
+        vehicleType: this.selectedVehicle,
+        weatherType: this.weatherSystem.getCurrentWeather(),
+        weatherScoreMultiplier: this.weatherSystem.getScoreMultiplier()
       });
 
       if (this._isCareerMode && this.career.selectedEventId) {
+        const weatherSummary = this.weatherSystem.finishRaceWeatherRecording();
+        const weatherBonus = weatherSummary ? Math.round((weatherSummary.coinMultiplier || 1.0) * 100 - 100) : 0;
 
         const result = this.career.processRaceResult(
           this.career.selectedEventId,
           finalRank,
           finalTime,
           finalBestLap,
-          this.totalLaps
+          this.totalLaps,
+          weatherSummary
         );
+
+        const weatherBonusCoins = weatherBonus > 0 ? Math.round(result.coinsEarned * weatherBonus / 100) : 0;
+        if (weatherBonusCoins > 0) {
+          this.career.addCoins(weatherBonusCoins);
+        }
 
         this.careerRaceResultData = {
           rank: finalRank,
           time: finalTime,
           bestLap: finalBestLap,
-          coinsEarned: result.coinsEarned,
+          correctedTime: result.correctedTime || finalTime,
+          adjustedBestLap: result.adjustedBestLap || finalBestLap,
+          coinsEarned: result.coinsEarned + weatherBonusCoins,
           isNewBest: result.isNewBest,
           totalLaps: this.totalLaps,
-          eventId: this.career.selectedEventId
+          eventId: this.career.selectedEventId,
+          weatherBonus: weatherBonusCoins,
+          weatherName: this.weatherSystem.getWeatherName(),
+          weatherInfo: result.weatherInfo || null,
+          weatherSummary: weatherSummary
         };
 
         this.state = GameState.CAREER_RACE_RESULT;
       } else {
+        this.weatherSystem.finishRaceWeatherRecording();
         this.state = GameState.FINISHED;
       }
     }
@@ -1920,6 +1951,8 @@ class Game {
     this.raceTime += dt * 1000;
     this.player.raceTime = this.raceTime;
 
+    this.weatherSystem.update(dt, 'racing');
+
     if (this.player.newRecordTimer > 0) {
       this.player.newRecordTimer -= dt;
       if (this.player.newRecordTimer <= 0) {
@@ -1949,7 +1982,7 @@ class Game {
       nitro: this.input.isNitro()
     };
 
-    this.player.update(dt, playerInput, this.track);
+    this.player.update(dt, playerInput, this.track, this.weatherSystem);
     this.collision.checkTrackCollision(this.player);
     this.collision.checkObstacleCollision(this.player);
     this.collision.updateRouteTracking(this.player);
@@ -1962,7 +1995,7 @@ class Game {
       if (!ai.finished) {
         ai.raceTime = this.raceTime;
       }
-      ai.update(dt, this.track, this.getAllBikes());
+      ai.update(dt, this.track, this.getAllBikes(), this.weatherSystem);
       this.collision.checkTrackCollision(ai);
       this.collision.checkObstacleCollision(ai);
       this.collision.updateRouteTracking(ai);
@@ -2266,7 +2299,7 @@ class Game {
     }
 
     if (this.state === GameState.CAREER_EVENT) {
-      this.renderer.drawCareerEvent(this);
+      this.renderer.drawCareerEventDetail(this);
       return;
     }
 
@@ -2308,19 +2341,25 @@ class Game {
     this.renderer.drawNitroBurst(this.player);
     this.renderer.drawSpeedLines(this.player);
 
+    this.renderer.drawWeatherEffects(this.weatherSystem, this.player);
+
     this.renderer.endTransform();
 
     if (this.state === GameState.COUNTDOWN) {
       this.renderer.drawHUD(this);
+      this.renderer.drawWeatherHUD(this);
       this.renderer.drawCountdown(this.countdown);
     } else if (this.state === GameState.RACING) {
       this.renderer.drawHUD(this);
+      this.renderer.drawWeatherHUD(this);
     } else if (this.state === GameState.WANTED_CHASE) {
       this.renderer.drawHUD(this);
+      this.renderer.drawWeatherHUD(this);
     } else if (this.state === GameState.WANTED_RESULT) {
       this.renderer.drawWantedResult(this);
     } else if (this.state === GameState.PAUSED) {
       this.renderer.drawHUD(this);
+      this.renderer.drawWeatherHUD(this);
       this.renderer.drawPauseOverlay(this);
     } else if (this.state === GameState.FINISHED) {
       this.renderer.drawFinished(this);
@@ -2361,15 +2400,38 @@ class Game {
     const nitroTotalTime = this.player.totalNitroTime || 0;
     const finished = this.player.finished;
 
+    const weatherScoreMult = this.weatherSystem.getScoreMultiplier();
+    const weatherLapMult = this.weatherSystem.getLapTimeMultiplier();
+
     this.achievements.processRaceResults({
       playerRank: rank,
       playerCollisions: totalPlayerCollisions,
       raceDriftDistance: driftDistance,
-      bestLapTime: bestLapTime,
+      bestLapTime: bestLapTime !== Infinity ? bestLapTime / weatherLapMult : bestLapTime,
       obstaclesDestroyed: obstaclesDestroyed,
       nitroTotalTime: nitroTotalTime,
-      finished: finished
+      finished: finished,
+      weatherScoreMultiplier: weatherScoreMult,
+      weatherDifficultyBonus: weatherScoreMult > 1.2 ? 1 : 0
     });
+  }
+
+  _updateSeason() {
+    let season;
+    if (this._isCareerMode) {
+      const stage = this.career.getStage(this.careerStageCursor);
+      if (stage && stage.season) {
+        season = stage.season;
+      }
+    }
+    if (!season) {
+      const month = new Date().getMonth();
+      if (month >= 2 && month <= 4) season = SeasonType.SPRING;
+      else if (month >= 5 && month <= 7) season = SeasonType.SUMMER;
+      else if (month >= 8 && month <= 10) season = SeasonType.AUTUMN;
+      else season = SeasonType.WINTER;
+    }
+    this.weatherSystem.setSeason(season);
   }
 
   _loadBestLapRecords() {

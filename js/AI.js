@@ -33,6 +33,11 @@ class AIBike extends Bike {
     this._overtakeCooldown = 0;
     this._defendCooldown = 0;
 
+    this.weatherAggressionMultiplier = 1.0;
+    this.weatherBrakeThreshold = 1.0;
+    this.weatherLookAheadMultiplier = 1.0;
+    this.weatherSpeedMultiplier = 1.0;
+
     this._setDifficultyParams();
   }
 
@@ -95,9 +100,9 @@ class AIBike extends Bike {
     }
   }
 
-  update(dt, track, bikes = []) {
+  update(dt, track, bikes = [], weatherSystem = null) {
     if (this.finished) {
-      super.update(dt, { accel: false, brake: false, left: false, right: false }, track);
+      super.update(dt, { accel: false, brake: false, left: false, right: false }, track, weatherSystem);
       return;
     }
 
@@ -117,6 +122,12 @@ class AIBike extends Bike {
       this._defendCooldown -= dt;
     }
 
+    if (weatherSystem) {
+      this._applyWeatherEffects(weatherSystem);
+    } else {
+      this._resetWeatherEffects();
+    }
+
     this._updateProgress(track);
     this._updateRouteDecision(track, bikes);
     this._updateRivalAwareness(track, bikes);
@@ -124,9 +135,26 @@ class AIBike extends Bike {
     this._determineBehavior(track, bikes);
 
     const input = this._calculateInput(track, bikes);
-    super.update(dt, input, track);
+    super.update(dt, input, track, weatherSystem);
 
     this._checkStuck(dt, track);
+  }
+
+  _applyWeatherEffects(weatherSystem) {
+    const config = weatherSystem.getConfig();
+    this.weatherAggressionMultiplier = config.aiAggressionMultiplier;
+    this.weatherBrakeThreshold = config.aiBrakeThreshold;
+    this.weatherLookAheadMultiplier = 0.6 + config.visibility * 0.4;
+    this.weatherSpeedMultiplier = config.aiSpeedMultiplier;
+    this.weatherGripMultiplier = config.gripMultiplier;
+    this.weatherVisibility = config.visibility;
+  }
+
+  _resetWeatherEffects() {
+    this.weatherAggressionMultiplier = 1.0;
+    this.weatherBrakeThreshold = 1.0;
+    this.weatherLookAheadMultiplier = 1.0;
+    this.weatherSpeedMultiplier = 1.0;
   }
 
   _updateProgress(track) {
@@ -377,14 +405,18 @@ class AIBike extends Bike {
       return;
     }
 
-    const hasRivalAhead = this.rivalAhead && this.rivalAhead.spatialDist < this.rivalScanRange;
-    const hasRivalBehind = this.rivalBehind && this.rivalBehind.spatialDist < this.rivalScanRange * 0.8;
+    const effectiveScanRange = this.rivalScanRange * this.weatherVisibility;
+    const hasRivalAhead = this.rivalAhead && this.rivalAhead.spatialDist < effectiveScanRange;
+    const hasRivalBehind = this.rivalBehind && this.rivalBehind.spatialDist < effectiveScanRange * 0.8;
+
+    const weatherCautiousness = 1 - this.weatherAggressionMultiplier;
+    const gripPenalty = 1 - this.weatherGripMultiplier;
 
     let wantAttack = false;
     let wantDefend = false;
 
     if (hasRivalAhead && this._overtakeCooldown <= 0) {
-      let overtakeDesire = this.overtakeAggression;
+      let overtakeDesire = this.overtakeAggression * this.weatherAggressionMultiplier;
 
       if (this.myRank > 1) {
         overtakeDesire *= 1.3;
@@ -396,21 +428,23 @@ class AIBike extends Bike {
 
       const straightBonus = this.straightness > 0.7 ? 0.2 : 0;
       const distPenalty = this.rivalAhead
-        ? Utils.clamp(this.rivalAhead.spatialDist / this.rivalScanRange, 0, 1)
+        ? Utils.clamp(this.rivalAhead.spatialDist / effectiveScanRange, 0, 1)
         : 1;
 
-      const attackScore = overtakeDesire + rankBonus + straightBonus - distPenalty * 0.3;
+      const weatherOvertakePenalty = gripPenalty * 0.5 + weatherCautiousness * 0.3;
+      const attackScore = overtakeDesire + rankBonus + straightBonus - distPenalty * 0.3 - weatherOvertakePenalty;
 
-      if (attackScore > 0.4 && this.straightness > 0.4) {
+      const minStraightForOvertake = 0.4 + gripPenalty * 0.4 + weatherCautiousness * 0.2;
+      if (attackScore > 0.4 && this.straightness > minStraightForOvertake) {
         wantAttack = true;
       }
     }
 
     if (hasRivalBehind && this._defendCooldown <= 0) {
-      const defendDesire = this.defendAwareness;
+      const defendDesire = this.defendAwareness * (1 + weatherCautiousness * 0.8);
 
       const closeness = this.rivalBehind
-        ? 1 - Utils.clamp(Math.abs(this.rivalBehind.spatialDist) / (this.rivalScanRange * 0.8), 0, 1)
+        ? 1 - Utils.clamp(Math.abs(this.rivalBehind.spatialDist) / (effectiveScanRange * 0.8), 0, 1)
         : 0;
 
       const rankThreat = this.rivalBehind && this.rankDifference < 0
@@ -419,13 +453,13 @@ class AIBike extends Bike {
 
       const defendScore = defendDesire + closeness * 0.4 + rankThreat;
 
-      if (defendScore > 0.5) {
+      if (defendScore > 0.45) {
         wantDefend = true;
       }
     }
 
     if (wantAttack && wantDefend) {
-      if (collisionRisk > 0.3) {
+      if (collisionRisk > 0.25 || this.weatherAggressionMultiplier < 0.7) {
         this.behavior = AIBehavior.DEFEND;
       } else if (this.straightness > 0.6) {
         this.behavior = AIBehavior.ATTACK;
@@ -446,12 +480,16 @@ class AIBike extends Bike {
   _calculateInput(track, bikes) {
     const input = { accel: true, brake: false, left: false, right: false };
 
-    const speedRatio = Math.abs(this.speed) / this.maxSpeed;
+    const effectiveMaxSpeed = this.baseMaxSpeed * this.weatherSpeedMultiplier;
+    const speedRatio = Math.abs(this.speed) / effectiveMaxSpeed;
+
+    const adjustedLookAheadMin = this.lookAheadMin * this.weatherLookAheadMultiplier;
+    const adjustedLookAheadMax = this.lookAheadMax * this.weatherLookAheadMultiplier;
 
     const lookAhead = Utils.lerp(
-      this.lookAheadMin,
-      this.lookAheadMax,
-      speedRatio * this.aggression
+      adjustedLookAheadMin,
+      adjustedLookAheadMax,
+      speedRatio * this.aggression * this.weatherAggressionMultiplier
     );
 
     let targetPoint;
@@ -517,7 +555,7 @@ class AIBike extends Bike {
     const futureAngle = Math.atan2(lookFarPoint.y - this.y, lookFarPoint.x - this.x);
     const futureAngleDiff = Math.abs(Utils.angleDifference(futureAngle, this.angle));
 
-    let brakeThreshold = 0.6 + (1 - this.aggression) * 0.25;
+    let brakeThreshold = (0.6 + (1 - this.aggression) * 0.25) * this.weatherBrakeThreshold;
 
     if (this.targetRouteId && this.targetRouteId !== this.currentRouteId) {
       brakeThreshold *= 0.8;
@@ -531,16 +569,19 @@ class AIBike extends Bike {
       brakeThreshold *= 0.85;
     }
 
-    if (futureAngleDiff > brakeThreshold && speedRatio > 0.45) {
+    const effectiveSpeedThreshold = 0.45 * this.weatherSpeedMultiplier;
+    if (futureAngleDiff > brakeThreshold && speedRatio > effectiveSpeedThreshold) {
       input.brake = true;
     }
 
-    if (cornerSharpness > brakeThreshold * 1.2 && speedRatio > 0.55) {
+    const cornerSpeedThreshold = 0.55 * this.weatherSpeedMultiplier;
+    if (cornerSharpness > brakeThreshold * 1.2 && speedRatio > cornerSpeedThreshold) {
       input.brake = true;
     }
 
     if (Math.abs(trackOffset.offset) > halfWidth * 0.65) {
-      if (speedRatio > 0.35) {
+      const offTrackSpeedThreshold = 0.35 * this.weatherSpeedMultiplier;
+      if (speedRatio > offTrackSpeedThreshold) {
         input.brake = true;
       }
       if (cornerSharpness < 0.2) {
@@ -561,6 +602,12 @@ class AIBike extends Bike {
 
     if (this.behavior === AIBehavior.ATTACK && !input.brake) {
       input.accel = true;
+    }
+
+    if (this.weatherAggressionMultiplier < 0.6 && speedRatio > 0.8) {
+      if (this.straightness < 0.7) {
+        input.accel = false;
+      }
     }
 
     input.accel = !input.brake;

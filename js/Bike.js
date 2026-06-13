@@ -75,7 +75,7 @@ class Bike {
     this.totalNitroTime = 0;
   }
 
-  update(dt, input, track) {
+  update(dt, input, track, weatherSystem = null) {
     if (this.finished) return;
 
     if (this.routeChangeCooldown > 0) {
@@ -88,23 +88,35 @@ class Bike {
     this.prevNitroActive = this.nitroActive;
     this._updateNitro(dt, input);
 
-    const currentAccel = this.acceleration * (this.nitroActive ? this.nitroAccelBoost : 1);
-    const currentMaxSpeed = this.baseMaxSpeed * (this.nitroActive ? this.nitroSpeedBoost : 1);
+    const weatherGrip = weatherSystem ? weatherSystem.getGripMultiplier() : 1.0;
+    const weatherFriction = weatherSystem ? weatherSystem.getConfig().frictionMultiplier : 1.0;
+    const weatherDriftResistance = weatherSystem ? weatherSystem.getConfig().driftResistance : 1.0;
+    const weatherSpeedMult = weatherSystem ? weatherSystem.getConfig().baseSpeedMultiplier : 1.0;
+    const wetness = weatherSystem ? weatherSystem.getWetness() : 0;
+
+    this.currentGrip = weatherGrip * this.tireGrip;
+    this.effectiveFriction = weatherFriction;
+    this.wetnessLevel = wetness;
+
+    const currentAccel = this.acceleration * (this.nitroActive ? this.nitroAccelBoost : 1) * this.currentGrip;
+    const currentMaxSpeed = this.baseMaxSpeed * (this.nitroActive ? this.nitroSpeedBoost : 1) * weatherSpeedMult;
 
     if (input.accel) {
       this.speed = Math.min(this.speed + currentAccel * dt, currentMaxSpeed);
     }
     if (input.brake) {
-      this.speed = Math.max(this.speed - this.brakePower * dt, -this.baseMaxSpeed * 0.3);
+      const brakeEfficiency = this.currentGrip;
+      this.speed = Math.max(this.speed - this.brakePower * brakeEfficiency * dt, -this.baseMaxSpeed * 0.3);
     }
 
     const trackOffset = track.getTrackOffset(this.x, this.y, this.currentRouteId);
     this.isOnTrack = Math.abs(trackOffset.offset) <= track.width / 2;
 
-    const friction = this.isOnTrack ? this.friction : this.offTrackFriction;
+    const baseFriction = this.isOnTrack ? this.friction : this.offTrackFriction;
+    const friction = baseFriction * weatherFriction;
     this.speed *= 1 - friction * dt;
 
-    const displayMaxSpeed = this.nitroActive ? currentMaxSpeed : this.baseMaxSpeed;
+    const displayMaxSpeed = this.nitroActive ? currentMaxSpeed : this.baseMaxSpeed * weatherSpeedMult;
     const speedRatio = Math.abs(this.speed) / displayMaxSpeed;
     this.maxSpeed = displayMaxSpeed;
 
@@ -112,10 +124,11 @@ class Bike {
     if (input.left) steerInput -= 1;
     if (input.right) steerInput += 1;
 
-    const steerAmount = this.steerSpeed * steerInput * speedRatio * dt;
+    const steerEffectiveness = this.currentGrip;
+    const steerAmount = this.steerSpeed * steerInput * speedRatio * steerEffectiveness * dt;
     this.angle += steerAmount;
 
-    this._updateDrift(steerInput, speedRatio, dt, this.isOnTrack);
+    this._updateDrift(steerInput, speedRatio, dt, this.isOnTrack, weatherDriftResistance, weatherSystem);
 
     const moveAngle = this.angle + this.driftAngle;
     this.x += Math.cos(moveAngle) * this.speed * dt;
@@ -223,17 +236,20 @@ class Bike {
     }
   }
 
-  _updateDrift(steerInput, speedRatio, dt, isOnTrack) {
-    const maxDriftAngle = this.baseDriftAngleMax + this.driftTireBonus;
+  _updateDrift(steerInput, speedRatio, dt, isOnTrack, weatherDriftResistance = 1.0, weatherSystem = null) {
+    const maxDriftAngle = (this.baseDriftAngleMax + this.driftTireBonus) * weatherDriftResistance;
     const targetDrift = steerInput * maxDriftAngle;
 
-    const gripFactor = this.tireGrip - this.driftGripLoss;
+    const gripFactor = (this.tireGrip - this.driftGripLoss) * (weatherSystem ? weatherSystem.getGripMultiplier() : 1.0);
     const effectiveThreshold = this.driftThreshold / Math.max(0.5, gripFactor);
 
+    const buildMultiplier = weatherDriftResistance < 1 ? (1 + (1 - weatherDriftResistance) * 0.5) : weatherDriftResistance;
+    const recoverMultiplier = weatherDriftResistance < 1 ? (1 + (1 - weatherDriftResistance) * 0.8) : 1.0;
+
     if (speedRatio > effectiveThreshold && Math.abs(steerInput) > 0.1 && isOnTrack) {
-      this.driftFactor = Math.min(this.driftFactor + dt * this.driftBuildSpeed, 1);
+      this.driftFactor = Math.min(this.driftFactor + dt * this.driftBuildSpeed * buildMultiplier, 1);
     } else {
-      this.driftFactor = Math.max(this.driftFactor - dt * this.driftRecoverSpeed, 0);
+      this.driftFactor = Math.max(this.driftFactor - dt * this.driftRecoverSpeed * recoverMultiplier, 0);
     }
 
     this.driftAngle = Utils.lerp(this.driftAngle, targetDrift * this.driftFactor, dt * 8);
@@ -382,6 +398,10 @@ class Bike {
     this.speed = 0;
     this.maxSpeed = this.baseMaxSpeed;
     this.acceleration = this.baseAcceleration;
+    this.brakePower = this.baseBrakePower;
+    this.friction = this.baseFriction;
+    this.steerSpeed = this.baseSteerSpeed;
+    this.tireGrip = this.baseTireGrip;
     this.driftAngle = 0;
     this.driftFactor = 0;
     this.lap = 0;
@@ -402,6 +422,7 @@ class Bike {
     this.branchChoiceLocked = false;
     this.skidMarks = [];
     this.particles = [];
+    this.waterSprayParticles = [];
     this.obstacleCollisions = 0;
     this.obstaclesDestroyed = 0;
     this.bikeCollisions = 0;
@@ -417,5 +438,14 @@ class Bike {
     this.prevNitroActive = false;
     this.totalDriftDistance = 0;
     this.totalNitroTime = 0;
+
+    this.weatherGripMultiplier = 1.0;
+    this.weatherFrictionMultiplier = 1.0;
+    this.weatherDriftMultiplier = 1.0;
+    this.weatherBrakeMultiplier = 1.0;
+    this.weatherAccelMultiplier = 1.0;
+    this.weatherMaxSpeedMultiplier = 1.0;
+    this.weatherVisibility = 1.0;
+    this.isWet = false;
   }
 }
