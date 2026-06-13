@@ -350,51 +350,8 @@ class Game {
   _setupTouchControls() {
     this.touchManager.applyLayout();
 
-    const controls = {
-      left: document.getElementById('btn-left'),
-      right: document.getElementById('btn-right'),
-      accel: document.getElementById('btn-accel'),
-      brake: document.getElementById('btn-brake'),
-      nitro: document.getElementById('btn-nitro')
-    };
-
-    Object.keys(controls).forEach(key => {
-      const btn = controls[key];
-      if (!btn) return;
-
-      const handleStart = (e) => {
-        e.preventDefault();
-
-        if (this.state === GameState.PAUSED) return;
-
-        const touch = e.touches ? e.touches[0] : e;
-        if (!this.touchManager.validateTouch(key, touch)) return;
-
-        const touchId = touch.identifier !== undefined ? touch.identifier : 'mouse';
-        this.touchManager.shouldActivate(key, touchId, e);
-        this.input.setTouchControl(key, true);
-        this.touchManager.registerActiveTouch(key, true);
-
-        btn.classList.add('touch-active');
-
-        this.touchManager.vibrate(key === 'brake' ? 'brake' : 'press');
-      };
-
-      const handleEnd = (e) => {
-        e.preventDefault();
-        this.input.setTouchControl(key, false);
-        this.touchManager.registerActiveTouch(key, false);
-        btn.classList.remove('touch-active');
-      };
-
-      btn.addEventListener('touchstart', handleStart, { passive: false });
-      btn.addEventListener('touchend', handleEnd, { passive: false });
-      btn.addEventListener('touchcancel', handleEnd, { passive: false });
-
-      btn.addEventListener('mousedown', handleStart);
-      btn.addEventListener('mouseup', handleEnd);
-      btn.addEventListener('mouseleave', handleEnd);
-    });
+    this._bindPlayerTouchControls(1);
+    this._bindPlayerTouchControls(2);
 
     this._setupPauseButton();
 
@@ -438,11 +395,62 @@ class Game {
         this.state = GameState.MENU;
         this.menuCursor = 9;
         this._isSplitScreen = false;
+        this.input.enableSplitScreen(false);
+        this.touchManager.setSplitScreenMode(false);
         this._splitscreenResultData = null;
         this.touchManager.vibrate('menuSelect');
       } else if (this.state === GameState.VEHICLE_SELECT_P2) {
         this._handleVehicleSelectP2Click(e);
       }
+    });
+  }
+
+  _bindPlayerTouchControls(playerIndex) {
+    const suffix = playerIndex === 1 ? '' : '-p2';
+    const controls = {
+      left: document.getElementById(`btn-left${suffix}`),
+      right: document.getElementById(`btn-right${suffix}`),
+      accel: document.getElementById(`btn-accel${suffix}`),
+      brake: document.getElementById(`btn-brake${suffix}`),
+      nitro: document.getElementById(`btn-nitro${suffix}`)
+    };
+
+    Object.keys(controls).forEach(key => {
+      const btn = controls[key];
+      if (!btn) return;
+
+      const handleStart = (e) => {
+        e.preventDefault();
+
+        if (this.state === GameState.PAUSED) return;
+
+        const touch = e.touches ? e.touches[0] : e;
+        if (!this.touchManager.validateTouch(key, touch)) return;
+
+        const touchId = `${playerIndex}-${touch.identifier !== undefined ? touch.identifier : 'mouse'}`;
+        this.touchManager.shouldActivate(`${playerIndex}-${key}`, touchId, e);
+        this.input.setTouchControl(key, true, playerIndex);
+        this.touchManager.registerActiveTouch(`${playerIndex}-${key}`, true);
+
+        btn.classList.add('touch-active');
+
+        this.touchManager.vibrate(key === 'brake' ? 'brake' : 'press');
+      };
+
+      const handleEnd = (e) => {
+        e.preventDefault();
+        this.input.setTouchControl(key, false, playerIndex);
+        this.touchManager.registerActiveTouch(`${playerIndex}-${key}`, false);
+        btn.classList.remove('touch-active');
+      };
+
+      btn.addEventListener('touchstart', handleStart, { passive: false });
+      btn.addEventListener('touchend', handleEnd, { passive: false });
+      btn.addEventListener('touchcancel', handleEnd, { passive: false });
+
+      btn.addEventListener('mousedown', handleStart);
+      btn.addEventListener('mouseup', handleEnd);
+      btn.addEventListener('mouseleave', handleEnd);
     });
   }
 
@@ -455,7 +463,19 @@ class Game {
       e.stopPropagation();
 
       if (this.state === GameState.RACING || this.state === GameState.COUNTDOWN) {
-        this.pauseGame();
+        if (this._isSplitScreen) {
+          const touch = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e);
+          const playerIndex = this._getPlayerFromTouchPosition(touch);
+          if (playerIndex === 1) {
+            this.pauseGame();
+            this.input.clearP1JustPressed();
+          } else {
+            this.pauseGame();
+            this.input.clearP2JustPressed();
+          }
+        } else {
+          this.pauseGame();
+        }
       } else if (this.state === GameState.PAUSED) {
         this.resumeGame();
       }
@@ -465,6 +485,22 @@ class Game {
 
     btn.addEventListener('touchstart', handleClick, { passive: false });
     btn.addEventListener('mousedown', handleClick);
+  }
+
+  _getPlayerFromTouchPosition(touch) {
+    if (!touch || touch.clientX === undefined) {
+      return 1;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    const isPortrait = window.innerHeight > window.innerWidth;
+
+    if (isPortrait) {
+      return x < rect.width / 2 ? 1 : 2;
+    } else {
+      return y < rect.height / 2 ? 1 : 2;
+    }
   }
 
   _handlePauseClick(e) {
@@ -1221,6 +1257,8 @@ class Game {
       this.state = GameState.MENU;
       this.menuCursor = 9;
       this._isSplitScreen = false;
+      this.input.enableSplitScreen(false);
+      this.touchManager.setSplitScreenMode(false);
       this.touchManager.vibrate('menuSelect');
     }
     this.input.clearJustPressed();
@@ -1229,6 +1267,8 @@ class Game {
   _confirmVehicleSelectionP2() {
     this.selectedVehicleP2 = VehicleTypeKeys[this.vehicleSelectCursorP2];
     this._isSplitScreen = true;
+    this.input.enableSplitScreen(true);
+    this.touchManager.setSplitScreenMode(true);
     this._applySettings();
     this._resetRace();
 
@@ -1429,6 +1469,8 @@ class Game {
         this.state = GameState.MENU;
         this.menuCursor = 9;
         this._isSplitScreen = false;
+        this.input.enableSplitScreen(false);
+        this.touchManager.setSplitScreenMode(false);
         this.touchManager.vibrate('menuSelect');
         return;
       }
@@ -1840,6 +1882,8 @@ class Game {
   startGame() {
     this._isWantedMode = false;
     this._isSplitScreen = false;
+    this.input.enableSplitScreen(false);
+    this.touchManager.setSplitScreenMode(false);
     this._applySettings();
     this._resetRace();
 
@@ -2677,6 +2721,8 @@ class Game {
         this.state = GameState.MENU;
         this.menuCursor = 9;
         this._isSplitScreen = false;
+        this.input.enableSplitScreen(false);
+        this.touchManager.setSplitScreenMode(false);
         this._splitscreenResultData = null;
         this.touchManager.vibrate('menuSelect');
         break;
@@ -2685,6 +2731,8 @@ class Game {
 
   _startSplitscreenRematch() {
     this._isSplitScreen = true;
+    this.input.enableSplitScreen(true);
+    this.touchManager.setSplitScreenMode(true);
     this._splitscreenResultData = null;
     this._applySettings();
     this._resetRace();
@@ -3123,6 +3171,9 @@ class Game {
     this.renderer.resize(width, height);
     if (this.touchManager.updateOrientation()) {
       this.touchManager.applyLayout();
+      if (this._isSplitScreen) {
+        this.touchManager.setSplitScreenMode(true);
+      }
     }
   }
 

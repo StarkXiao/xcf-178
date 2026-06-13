@@ -135,12 +135,26 @@ class Input {
     this._splitScreenActive = active;
   }
 
+  _isPortrait() {
+    return window.innerHeight > window.innerWidth;
+  }
+
   handleCanvasTouchStart(canvas, touch, controlMap) {
     if (!this._splitScreenActive) return;
     const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
     const y = touch.clientY - rect.top;
-    const halfH = rect.height / 2;
-    const playerIndex = y < halfH ? 1 : 2;
+    const isPortrait = this._isPortrait();
+
+    let playerIndex;
+    if (isPortrait) {
+      const halfW = rect.width / 2;
+      playerIndex = x < halfW ? 1 : 2;
+    } else {
+      const halfH = rect.height / 2;
+      playerIndex = y < halfH ? 1 : 2;
+    }
+
     const control = controlMap(touch, playerIndex);
     if (control) {
       this.setTouchControl(control, true, playerIndex);

@@ -1195,3 +1195,138 @@ html, body {
     font-size: 12px;
   }
 }
+
+.touch-controls.splitscreen {
+  width: 50%;
+}
+
+.touch-controls.splitscreen-portrait {
+  width: 50%;
+  height: 100%;
+  bottom: 0 !important;
+  top: 0 !important;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 10px !important;
+}
+
+.touch-controls.splitscreen:not(.splitscreen-portrait) {
+  height: 50%;
+}
+
+#touchControls.splitscreen {
+  left: 0;
+  right: auto;
+}
+
+#touchControls.splitscreen-portrait {
+  left: 0;
+  right: auto;
+}
+
+#touchControlsP2.splitscreen {
+  left: auto;
+  right: 0;
+}
+
+#touchControlsP2.splitscreen-portrait {
+  left: auto;
+  right: 0;
+}
+
+.touch-controls.splitscreen-portrait .d-pad {
+  flex-direction: column;
+  align-self: flex-start;
+  margin-left: 10px;
+}
+
+.touch-controls.splitscreen-portrait .action-pad {
+  flex-direction: column;
+  align-self: flex-end;
+  margin-right: 10px;
+  align-items: flex-end;
+}
+
+#touchControls.splitscreen-portrait.left-handed .d-pad {
+  align-self: flex-end;
+  margin-left: 0;
+  margin-right: 10px;
+  order: 1;
+}
+
+#touchControls.splitscreen-portrait.left-handed .action-pad {
+  align-self: flex-start;
+  margin-right: 0;
+  margin-left: 10px;
+  align-items: flex-start;
+  order: 2;
+}
+
+#touchControlsP2.splitscreen-portrait .d-pad {
+  flex-direction: column;
+  align-self: flex-end;
+  margin-right: 10px;
+  order: 2;
+}
+
+#touchControlsP2.splitscreen-portrait .action-pad {
+  flex-direction: column;
+  align-self: flex-start;
+  margin-left: 10px;
+  align-items: flex-start;
+  order: 1;
+}
+
+#touchControlsP2.splitscreen-portrait.left-handed .d-pad {
+  align-self: flex-start;
+  margin-right: 0;
+  margin-left: 10px;
+  order: 1;
+}
+
+#touchControlsP2.splitscreen-portrait.left-handed .action-pad {
+  align-self: flex-end;
+  margin-left: 0;
+  margin-right: 10px;
+  align-items: flex-end;
+  order: 2;
+}
+
+.touch-controls.splitscreen-portrait .d-pad {
+  gap: 10px;
+}
+
+.touch-controls.splitscreen-portrait .action-pad {
+  gap: 10px;
+}
+
+.touch-controls.splitscreen-portrait .btn-accel {
+  order: 1;
+}
+
+.touch-controls.splitscreen-portrait .btn-nitro {
+  order: 2;
+}
+
+.touch-controls.splitscreen-portrait .btn-brake {
+  order: 3;
+}
+
+.btn-pause.splitscreen {
+  top: 50% !important;
+  transform: translateY(-50%);
+  right: 10px !important;
+  left: auto !important;
+}
+
+@media (max-width: 768px) {
+  .touch-controls.splitscreen-portrait {
+    padding: 15px 8px !important;
+  }
+
+  .touch-controls.splitscreen-portrait .d-pad,
+  .touch-controls.splitscreen-portrait .action-pad {
+    gap: 8px;
+  }
+}

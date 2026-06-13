@@ -233,6 +233,11 @@ class TouchControlManager {
   }
 
   applyLayout() {
+    this._applySinglePlayerLayout();
+    this._applyPlayer2Layout();
+  }
+
+  _applySinglePlayerLayout() {
     const container = document.getElementById('touchControls');
     if (!container) return;
 
@@ -251,9 +256,68 @@ class TouchControlManager {
       left: document.getElementById('btn-left'),
       right: document.getElementById('btn-right'),
       accel: document.getElementById('btn-accel'),
-      brake: document.getElementById('btn-brake')
+      brake: document.getElementById('btn-brake'),
+      nitro: document.getElementById('btn-nitro')
     };
 
+    this._applyButtonSizes(buttons, preset, scale);
+
+    const dPad = container.querySelector('.d-pad');
+    const actionPad = container.querySelector('.action-pad');
+    const gap = preset.gap * scale;
+    if (dPad) dPad.style.gap = gap + 'px';
+    if (actionPad) actionPad.style.gap = gap + 'px';
+
+    const bottom = (isPortrait ? this._portraitBottomOffset : preset.bottom) * scale;
+    const padding = preset.padding * scale;
+    container.style.bottom = bottom + 'px';
+    container.style.padding = `0 ${padding}px`;
+
+    container.style.display = '';
+
+    this._updateOrientationHint();
+  }
+
+  _applyPlayer2Layout() {
+    const container = document.getElementById('touchControlsP2');
+    if (!container) return;
+
+    const preset = this.layoutPresets[this.currentLayout];
+    const isPortrait = this.isPortrait();
+    const scale = isPortrait ? this._portraitScale : 1;
+
+    container.className = 'touch-controls touch-controls-p2';
+    container.classList.add(`layout-${this.currentLayout}`);
+    container.classList.add(`orientation-${this.orientation}`);
+    if (preset.dPadPosition === 'right') {
+      container.classList.add('left-handed');
+    }
+
+    const buttons = {
+      left: document.getElementById('btn-left-p2'),
+      right: document.getElementById('btn-right-p2'),
+      accel: document.getElementById('btn-accel-p2'),
+      brake: document.getElementById('btn-brake-p2'),
+      nitro: document.getElementById('btn-nitro-p2')
+    };
+
+    this._applyButtonSizes(buttons, preset, scale);
+
+    const dPad = container.querySelector('.d-pad');
+    const actionPad = container.querySelector('.action-pad');
+    const gap = preset.gap * scale;
+    if (dPad) dPad.style.gap = gap + 'px';
+    if (actionPad) actionPad.style.gap = gap + 'px';
+
+    const bottom = (isPortrait ? this._portraitBottomOffset : preset.bottom) * scale;
+    const padding = preset.padding * scale;
+    container.style.bottom = bottom + 'px';
+    container.style.padding = `0 ${padding}px`;
+
+    container.style.display = 'none';
+  }
+
+  _applyButtonSizes(buttons, preset, scale) {
     Object.keys(buttons).forEach(key => {
       const btn = buttons[key];
       if (!btn) return;
@@ -268,6 +332,9 @@ class TouchControlManager {
       } else if (key === 'brake') {
         w = preset.brakeW * scale;
         h = preset.brakeH * scale;
+      } else if (key === 'nitro') {
+        w = preset.btnSize * scale;
+        h = preset.btnSize * scale;
       }
 
       btn.style.width = w + 'px';
@@ -279,19 +346,27 @@ class TouchControlManager {
       if (icon) icon.style.fontSize = (preset.iconSize * scale) + 'px';
       if (label) label.style.fontSize = (preset.labelSize * scale) + 'px';
     });
+  }
 
-    const dPad = container.querySelector('.d-pad');
-    const actionPad = container.querySelector('.action-pad');
-    const gap = preset.gap * scale;
-    if (dPad) dPad.style.gap = gap + 'px';
-    if (actionPad) actionPad.style.gap = gap + 'px';
+  setSplitScreenMode(enabled) {
+    const p1Controls = document.getElementById('touchControls');
+    const p2Controls = document.getElementById('touchControlsP2');
+    const pauseBtn = document.getElementById('btn-pause');
 
-    const bottom = (isPortrait ? this._portraitBottomOffset : preset.bottom) * scale;
-    const padding = preset.padding * scale;
-    container.style.bottom = bottom + 'px';
-    container.style.padding = `0 ${padding}px`;
+    if (p1Controls) {
+      p1Controls.classList.toggle('splitscreen', enabled);
+      p1Controls.classList.toggle('splitscreen-portrait', enabled && this.isPortrait());
+    }
 
-    this._updateOrientationHint();
+    if (p2Controls) {
+      p2Controls.style.display = enabled ? '' : 'none';
+      p2Controls.classList.toggle('splitscreen', enabled);
+      p2Controls.classList.toggle('splitscreen-portrait', enabled && this.isPortrait());
+    }
+
+    if (pauseBtn) {
+      pauseBtn.classList.toggle('splitscreen', enabled);
+    }
   }
 
   vibrate(type) {
@@ -361,7 +436,22 @@ class TouchControlManager {
       }
     }
 
-    if (this._activeTouches.size >= config.maxTouches) {
+    const playerPrefix = control.startsWith('1-') ? '1-' : (control.startsWith('2-') ? '2-' : '');
+    let playerTouchCount = 0;
+    let hasOtherPlayerTouch = false;
+
+    this._activeTouches.forEach((active, ctrl) => {
+      if (!active) return;
+      if (playerPrefix && ctrl.startsWith(playerPrefix)) {
+        playerTouchCount++;
+      } else if (playerPrefix && !ctrl.startsWith(playerPrefix)) {
+        hasOtherPlayerTouch = true;
+      } else if (!playerPrefix) {
+        playerTouchCount++;
+      }
+    });
+
+    if (playerTouchCount >= config.maxTouches) {
       if (!this._activeTouches.has(control)) {
         return false;
       }
@@ -370,7 +460,8 @@ class TouchControlManager {
     for (const pair of this._conflictPairs) {
       if (pair.includes(control)) {
         const other = pair[0] === control ? pair[1] : pair[0];
-        if (this._activeTouches.has(other) && this._activeTouches.get(other)) {
+        const otherWithPrefix = playerPrefix ? playerPrefix + other : other;
+        if (this._activeTouches.has(otherWithPrefix) && this._activeTouches.get(otherWithPrefix)) {
           return false;
         }
       }
