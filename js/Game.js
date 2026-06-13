@@ -2063,6 +2063,9 @@ class Game {
     const state = this.wantedSystem.getState();
     const escaped = state === WantedState.ESCAPED;
     const rewardBreakdown = this.wantedSystem.getRewardBreakdown();
+    const totalReward = this.wantedSystem.getReward();
+
+    const coinsEarned = this.career.addCoins(totalReward);
 
     this._wantedResultData = {
       escaped: escaped,
@@ -2071,8 +2074,9 @@ class Game {
       maxPoliceCount: this.wantedSystem.getMaxPoliceCount(),
       nearMisses: this.wantedSystem.nearMissCount,
       collisions: this.wantedSystem.totalPoliceCollisions,
-      totalReward: this.wantedSystem.getReward(),
-      rewardBreakdown: rewardBreakdown
+      totalReward: totalReward,
+      rewardBreakdown: rewardBreakdown,
+      coinsEarned: coinsEarned
     };
 
     if (this._isCareerMode) {

@@ -301,6 +301,13 @@ class CareerManager {
     } catch (e) {}
   }
 
+  addCoins(amount) {
+    if (amount <= 0) return 0;
+    this.coins += amount;
+    this._saveProgress();
+    return amount;
+  }
+
   getStages() {
     return CareerStages;
   }

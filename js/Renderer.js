@@ -2434,6 +2434,16 @@ class Renderer {
     ctx.font = `${subtitleSize}px monospace`;
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
+    const coins = game.career.coins;
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ffff00';
+    ctx.font = `bold ${subtitleSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`💰 ${coins}`, this.width - (isPortrait ? 15 * uiScale : 20), titleY + 5);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'center';
+
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
     const panelH = isPortrait ? 480 * uiScale : 480;
     const panelX = centerX - panelW / 2;
