@@ -791,7 +791,7 @@ class WeatherSystem {
     this.setSeason(season);
 
     const hasForcedWeather = eventWeatherOverride && this.forceWeatherBySeasonEvent(eventWeatherOverride);
-    this.dynamicWeatherEnabled = !hasForcedWeather && dynamicEnabled;
+    this.dynamicWeatherEnabled = dynamicEnabled;
 
     if (!hasForcedWeather) {
       this._selectInitialWeather();
