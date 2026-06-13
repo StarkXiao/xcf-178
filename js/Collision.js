@@ -343,6 +343,116 @@ class Collision {
     };
   }
 
+  checkPoliceCollision(bike, policeBike) {
+    if (policeBike._isPolice && !policeBike.canHitPlayer()) {
+      return false;
+    }
+
+    const minDist = 32;
+    const dist = Utils.distance(bike.x, bike.y, policeBike.x, policeBike.y);
+
+    if (dist < minDist) {
+      const angle = Math.atan2(policeBike.y - bike.y, policeBike.x - bike.x);
+      const overlap = minDist - dist;
+
+      const pushX = Math.cos(angle) * overlap * 0.5;
+      const pushY = Math.sin(angle) * overlap * 0.5;
+
+      bike.x -= pushX;
+      bike.y -= pushY;
+      policeBike.x += pushX;
+      policeBike.y += pushY;
+
+      const avgSpeed = (bike.speed + policeBike.speed) * 0.5;
+      bike.speed = avgSpeed * 0.35;
+      policeBike.speed = avgSpeed * 0.6;
+
+      bike.driftAngle *= 0.2;
+      policeBike.driftAngle *= 0.5;
+
+      if (bike.isPlayer) {
+        if (!bike.policeCollisions) bike.policeCollisions = 0;
+        bike.policeCollisions++;
+      }
+
+      if (policeBike._isPolice && policeBike.onPlayerCollision) {
+        policeBike.onPlayerCollision();
+      }
+
+      if (bike._addHitParticles === undefined || bike._addHitParticles === null) {
+        bike._addHitParticles = {
+          x: (bike.x + policeBike.x) / 2,
+          y: (bike.y + policeBike.y) / 2,
+          color: '#ff0044'
+        };
+      }
+
+      return true;
+    }
+    return false;
+  }
+
+  checkAllPoliceCollisions(playerBike, policeBikes) {
+    let collisions = 0;
+
+    for (const police of policeBikes) {
+      if (this.checkPoliceCollision(playerBike, police)) {
+        collisions++;
+      }
+    }
+
+    for (let i = 0; i < policeBikes.length; i++) {
+      for (let j = i + 1; j < policeBikes.length; j++) {
+        this._checkPoliceOnPoliceCollision(policeBikes[i], policeBikes[j]);
+      }
+    }
+
+    return collisions;
+  }
+
+  _checkPoliceOnPoliceCollision(police1, police2) {
+    const minDist = 28;
+    const dist = Utils.distance(police1.x, police1.y, police2.x, police2.y);
+
+    if (dist < minDist) {
+      const angle = Math.atan2(police2.y - police1.y, police2.x - police1.x);
+      const overlap = minDist - dist;
+
+      const pushX = Math.cos(angle) * overlap * 0.5;
+      const pushY = Math.sin(angle) * overlap * 0.5;
+
+      police1.x -= pushX;
+      police1.y -= pushY;
+      police2.x += pushX;
+      police2.y += pushY;
+
+      const avgSpeed = (police1.speed + police2.speed) * 0.5;
+      police1.speed = avgSpeed * 0.7;
+      police2.speed = avgSpeed * 0.7;
+
+      return true;
+    }
+    return false;
+  }
+
+  checkNearMiss(player, policeBikes, nearMissDist = 50) {
+    let nearMisses = 0;
+
+    for (const police of policeBikes) {
+      const dist = Utils.distance(player.x, player.y, police.x, police.y);
+      if (dist < nearMissDist && dist > 35) {
+        const angleToPlayer = Math.atan2(player.y - police.y, player.x - police.x);
+        const relAngle = Math.abs(Utils.angleDifference(angleToPlayer, police.angle));
+
+        if (relAngle < Math.PI / 3) {
+          nearMisses++;
+        }
+      }
+    }
+
+    return nearMisses;
+  }
+
   resetObstacleStats() {
     this._obstacleCollisionCount = 0;
     this._obstaclesDestroyedTotal = 0;

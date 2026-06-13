@@ -764,6 +764,90 @@ class Renderer {
     ctx.restore();
   }
 
+  drawPoliceBike(police) {
+    const ctx = this.ctx;
+
+    ctx.save();
+    ctx.translate(police.x, police.y);
+    ctx.rotate(police.angle + police.driftAngle * 0.5);
+
+    const wheelBase = police.wheelBase;
+    const halfWidth = police.width / 2;
+
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = '#ff0044';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.moveTo(wheelBase * 0.6, 0);
+    ctx.lineTo(wheelBase * 0.2, -halfWidth);
+    ctx.lineTo(-wheelBase * 0.5, -halfWidth * 0.8);
+    ctx.lineTo(-wheelBase * 0.7, 0);
+    ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.8);
+    ctx.lineTo(wheelBase * 0.2, halfWidth);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ff0044';
+    ctx.beginPath();
+    ctx.moveTo(wheelBase * 0.2, -halfWidth * 0.3);
+    ctx.lineTo(-wheelBase * 0.3, -halfWidth * 0.9);
+    ctx.lineTo(-wheelBase * 0.5, -halfWidth * 0.6);
+    ctx.lineTo(wheelBase * 0.05, -halfWidth * 0.1);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#0044ff';
+    ctx.beginPath();
+    ctx.moveTo(wheelBase * 0.2, halfWidth * 0.3);
+    ctx.lineTo(-wheelBase * 0.3, halfWidth * 0.9);
+    ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.6);
+    ctx.lineTo(wheelBase * 0.05, halfWidth * 0.1);
+    ctx.closePath();
+    ctx.fill();
+
+    const sirenPhase = police.sirenPhase || 0;
+    const sirenIntensity = (Math.sin(sirenPhase) + 1) / 2;
+
+    ctx.shadowBlur = 20 + sirenIntensity * 20;
+    ctx.shadowColor = sirenIntensity > 0.5 ? '#ff0044' : '#0044ff';
+    ctx.fillStyle = sirenIntensity > 0.5 ? '#ff0044' : '#0044ff';
+    ctx.beginPath();
+    ctx.arc(wheelBase * 0.1, 0, 5 + sirenIntensity * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 10 + (1 - sirenIntensity) * 15;
+    ctx.shadowColor = sirenIntensity > 0.5 ? '#0044ff' : '#ff0044';
+    ctx.fillStyle = sirenIntensity > 0.5 ? '#0044ff' : '#ff0044';
+    ctx.beginPath();
+    ctx.arc(wheelBase * -0.1, 0, 4 + (1 - sirenIntensity) * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    if (police.speed > 20) {
+      const tailLength = Math.min(police.speed * 0.25, 60);
+      const gradient = ctx.createLinearGradient(-wheelBase * 0.7, 0, -wheelBase * 0.7 - tailLength, 0);
+      gradient.addColorStop(0, '#ff0044');
+      gradient.addColorStop(1, 'transparent');
+
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff0044';
+      ctx.fillStyle = gradient;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-wheelBase * 0.5, -halfWidth * 0.5);
+      ctx.lineTo(-wheelBase * 0.7 - tailLength, 0);
+      ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }
+
   drawParticles(bikes) {
     const ctx = this.ctx;
 
@@ -973,11 +1057,141 @@ class Renderer {
       this._drawNewRecordOverlay(game.player);
     }
 
+    if (game._isWantedMode && game.wantedSystem && game.wantedSystem.getState() !== WantedState.IDLE) {
+      this.drawWantedHUD(game);
+    }
+
     ctx.restore();
 
     this.drawNitroScreenOverlay(game.player);
     this.drawRouteHints(game.track, game.player);
     this.drawAchievementNotification(game);
+  }
+
+  drawWantedHUD(game) {
+    const ctx = this.ctx;
+    const wanted = game.wantedSystem;
+    const stars = wanted.getWantedStars();
+    const state = wanted.getState();
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+
+    const padding = isPortrait ? 12 : 20;
+    const rightX = this.width - padding;
+    const topY = isPortrait ? 120 * uiScale : 140;
+
+    const starSize = isPortrait ? 20 * uiScale : 22;
+    const starSpacing = isPortrait ? 4 * uiScale : 5;
+    const totalW = stars * starSize + (stars - 1) * starSpacing;
+    const startX = rightX - totalW;
+
+    const flashIntensity = wanted.flashTimer > 0 ? (wanted.flashTimer / 0.5) : 0;
+    const isEscaping = state === WantedState.ESCAPING;
+
+    for (let i = 0; i < stars; i++) {
+      const starX = startX + i * (starSize + starSpacing);
+      const starY = topY;
+
+      const glowColor = isEscaping ? '#00ff66' : '#ff0044';
+      const starColor = '#ffff00';
+
+      ctx.shadowBlur = 12 + flashIntensity * 15;
+      ctx.shadowColor = glowColor;
+      ctx.fillStyle = starColor;
+      ctx.font = `bold ${starSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('★', starX, starY);
+    }
+    ctx.shadowBlur = 0;
+
+    const labelY = topY + starSize + (isPortrait ? 4 * uiScale : 6);
+    const labelSize = isPortrait ? 11 * uiScale : 12;
+    let labelText = 'WANTED';
+    let labelColor = '#ff0044';
+
+    if (state === WantedState.ESCAPING) {
+      labelText = 'ESCAPING...';
+      labelColor = '#00ff66';
+    } else if (state === WantedState.ESCAPED) {
+      labelText = 'ESCAPED!';
+      labelColor = '#00ff66';
+    } else if (state === WantedState.BUSTED) {
+      labelText = 'BUSTED!';
+      labelColor = '#ff0044';
+    }
+
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = labelColor;
+    ctx.fillStyle = labelColor;
+    ctx.font = `bold ${labelSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(labelText, rightX, labelY);
+    ctx.shadowBlur = 0;
+
+    if (state === WantedState.ESCAPING || state === WantedState.WANTED) {
+      const barW = isPortrait ? 100 * uiScale : 120;
+      const barH = isPortrait ? 6 * uiScale : 7;
+      const barX = rightX - barW;
+      const barY = labelY + labelSize + (isPortrait ? 8 * uiScale : 10);
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 3 * uiScale);
+      ctx.fill();
+
+      const progress = wanted.getEscapeProgress();
+      const progressColor = state === WantedState.ESCAPING ? '#00ff66' : '#ff0044';
+
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = progressColor;
+      ctx.fillStyle = progressColor;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW * progress, barH, 3 * uiScale);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      const timeText = state === WantedState.ESCAPING
+        ? `逃脱: ${Math.ceil((1 - progress) * WantedLevelConfig[stars].escapeTime)}s`
+        : `存活: ${Math.floor(wanted.getSurvivalTime())}s`;
+
+      ctx.fillStyle = '#aaa';
+      ctx.font = `${labelSize - 1}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(timeText, rightX, barY + barH + (isPortrait ? 12 * uiScale : 14));
+    }
+
+    const policeCount = wanted.getPoliceBikes().length;
+    const countY = isPortrait ? 95 * uiScale : 90;
+
+    ctx.fillStyle = '#ff0044';
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = '#ff0044';
+    ctx.font = `bold ${labelSize}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`🚓 ×${policeCount}`, rightX, countY);
+    ctx.shadowBlur = 0;
+
+    if (state === WantedState.WANTED || state === WantedState.ESCAPING) {
+      const heatLevel = wanted.heatLevel;
+      const heatMax = wanted.maxHeat;
+      const heatRatio = heatLevel / heatMax;
+
+      const heatBarW = isPortrait ? 80 * uiScale : 100;
+      const heatBarH = isPortrait ? 4 * uiScale : 5;
+      const heatBarX = rightX - heatBarW;
+      const heatBarY = countY + 20;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(heatBarX, heatBarY, heatBarW, heatBarH);
+
+      const heatColor = heatRatio > 0.7 ? '#ff0044' : heatRatio > 0.4 ? '#ff6600' : '#ffff00';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = heatColor;
+      ctx.fillStyle = heatColor;
+      ctx.fillRect(heatBarX, heatBarY, heatBarW * heatRatio, heatBarH);
+      ctx.shadowBlur = 0;
+    }
   }
 
   _drawSpeedometer(player, x, y, scale = 1) {
@@ -2221,7 +2435,7 @@ class Renderer {
     ctx.fillText('极速霓虹', centerX, titleY + (isPortrait ? 30 * uiScale : 38));
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 440 * uiScale : 440;
+    const panelH = isPortrait ? 480 * uiScale : 480;
     const panelX = centerX - panelW / 2;
     const panelY = isPortrait ? titleY + 60 * uiScale : centerY - 100;
 
@@ -2249,6 +2463,7 @@ class Renderer {
     const btnOffset6 = btnOffset5 + itemSpacing + 6 * uiScale;
     const btnOffset7 = btnOffset6 + itemSpacing;
     const btnOffset8 = btnOffset7 + itemSpacing;
+    const btnOffset9 = btnOffset8 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -2308,12 +2523,19 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset8, panelW,
-      '开始比赛',
+      '🚓 悬赏追逐',
       game.menuCursor === 8, uiScale,
+      '#ff0044'
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + btnOffset9, panelW,
+      '开始比赛',
+      game.menuCursor === 9, uiScale,
       '#00ff66'
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset8 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset9 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -3001,6 +3223,155 @@ class Renderer {
     ctx.font = 'bold 18px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('按 空格键 返回菜单', this.width / 2, panelY + panelHeight - 25);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+
+  drawWantedResult(game) {
+    const ctx = this.ctx;
+    const result = game._wantedResultData;
+    if (!result) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.92)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const centerX = this.width / 2;
+
+    const panelWidth = isPortrait ? 320 * uiScale : 380;
+    const panelHeight = isPortrait ? 480 * uiScale : 520;
+    const panelX = (this.width - panelWidth) / 2;
+    const panelY = (this.height - panelHeight) / 2;
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.fill();
+
+    const accentColor = result.escaped ? '#00ff66' : '#ff0044';
+    const titleText = result.escaped ? 'ESCAPED!' : 'BUSTED!';
+
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = accentColor;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const titleSize = isPortrait ? 36 * uiScale : 42;
+    ctx.fillStyle = accentColor;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = accentColor;
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(titleText, centerX, panelY + 60 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const starText = '★'.repeat(result.wantedStars) + '☆'.repeat(5 - result.wantedStars);
+    const starSize = isPortrait ? 24 * uiScale : 28;
+    ctx.fillStyle = '#ffff00';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff0044';
+    ctx.font = `${starSize}px monospace`;
+    ctx.fillText(starText, centerX, panelY + 100 * uiScale);
+    ctx.shadowBlur = 0;
+
+    let infoY = panelY + 130 * uiScale;
+    const labelSize = isPortrait ? 13 * uiScale : 14;
+    const valueSize = isPortrait ? 16 * uiScale : 18;
+
+    const stats = [
+      { label: '生存时间', value: Utils.formatTime(result.survivalTime * 1000), color: '#00f5ff' },
+      { label: '最高通缉星级', value: `${result.wantedStars} 星`, color: '#ffff00' },
+      { label: '警车数量', value: `${result.maxPoliceCount} 辆`, color: '#ff0044' },
+      { label: '惊险躲避', value: `${result.nearMisses} 次`, color: '#ff6600' },
+      { label: '碰撞次数', value: `${result.collisions} 次`, color: '#ff9900' }
+    ];
+
+    stats.forEach(stat => {
+      ctx.fillStyle = '#888';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(stat.label, panelX + 30 * uiScale, infoY);
+
+      ctx.fillStyle = stat.color;
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = stat.color;
+      ctx.font = `bold ${valueSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(stat.value, panelX + panelWidth - 30 * uiScale, infoY);
+      ctx.shadowBlur = 0;
+
+      infoY += 32 * uiScale;
+    });
+
+    const dividerY = infoY + 5 * uiScale;
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 25 * uiScale, dividerY);
+    ctx.lineTo(panelX + panelWidth - 25 * uiScale, dividerY);
+    ctx.stroke();
+    infoY = dividerY + 20 * uiScale;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${labelSize + 2}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('奖励明细', panelX + 30 * uiScale, infoY);
+    infoY += 28 * uiScale;
+
+    const rewardDetails = [
+      { label: '基础奖励', value: result.rewardBreakdown.base, color: '#00ff66' },
+      { label: '生存时间奖励', value: result.rewardBreakdown.survival, color: '#00f5ff' },
+      { label: '惊险躲避奖励', value: result.rewardBreakdown.nearMiss, color: '#ff6600' },
+      { label: '碰撞惩罚', value: -result.rewardBreakdown.collision, color: '#ff0044' }
+    ];
+
+    rewardDetails.forEach(detail => {
+      ctx.fillStyle = '#888';
+      ctx.font = `${labelSize - 1}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(detail.label, panelX + 40 * uiScale, infoY);
+
+      const sign = detail.value >= 0 ? '+' : '';
+      ctx.fillStyle = detail.color;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = detail.color;
+      ctx.font = `bold ${labelSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`${sign}${detail.value}`, panelX + panelWidth - 30 * uiScale, infoY);
+      ctx.shadowBlur = 0;
+
+      infoY += 24 * uiScale;
+    });
+
+    infoY += 10 * uiScale;
+    const totalColor = result.totalReward >= 0 ? '#ffd700' : '#ff0044';
+    ctx.fillStyle = totalColor;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = totalColor;
+    ctx.font = `bold ${valueSize + 4}px monospace`;
+    ctx.textAlign = 'center';
+    const totalText = result.totalReward >= 0
+      ? `总奖励: ${result.totalReward} 💰`
+      : `总奖励: ${result.totalReward}`;
+    ctx.fillText(totalText, centerX, infoY);
+    ctx.shadowBlur = 0;
+
+    const hintSize = isPortrait ? 12 * uiScale : 13;
+    ctx.fillStyle = '#00f5ff';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#00f5ff';
+    ctx.font = `bold ${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('按 空格键 返回菜单', centerX, panelY + panelHeight - 25 * uiScale);
     ctx.shadowBlur = 0;
 
     ctx.restore();
