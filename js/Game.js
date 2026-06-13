@@ -1878,7 +1878,6 @@ class Game {
 
       if (this._isCareerMode && this.career.selectedEventId) {
         const weatherSummary = this.weatherSystem.finishRaceWeatherRecording();
-        const weatherBonus = weatherSummary ? Math.round((weatherSummary.coinMultiplier || 1.0) * 100 - 100) : 0;
 
         const result = this.career.processRaceResult(
           this.career.selectedEventId,
@@ -1889,10 +1888,7 @@ class Game {
           weatherSummary
         );
 
-        const weatherBonusCoins = weatherBonus > 0 ? Math.round(result.coinsEarned * weatherBonus / 100) : 0;
-        if (weatherBonusCoins > 0) {
-          this.career.addCoins(weatherBonusCoins);
-        }
+        const weatherBonusCoins = 0;
 
         this.careerRaceResultData = {
           rank: finalRank,
@@ -1900,7 +1896,7 @@ class Game {
           bestLap: finalBestLap,
           correctedTime: result.correctedTime || finalTime,
           adjustedBestLap: result.adjustedBestLap || finalBestLap,
-          coinsEarned: result.coinsEarned + weatherBonusCoins,
+          coinsEarned: result.coinsEarned,
           isNewBest: result.isNewBest,
           totalLaps: this.totalLaps,
           eventId: this.career.selectedEventId,

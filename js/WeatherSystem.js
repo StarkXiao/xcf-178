@@ -782,7 +782,6 @@ class WeatherSystem {
   forceWeatherBySeasonEvent(eventWeather) {
     if (eventWeather && WeatherConfig[eventWeather]) {
       this.setWeather(eventWeather, false);
-      this.dynamicWeatherEnabled = false;
       return true;
     }
     return false;
@@ -791,12 +790,12 @@ class WeatherSystem {
   startRaceWeatherSetup(season, eventWeatherOverride = null, dynamicEnabled = true) {
     this.setSeason(season);
 
-    if (eventWeatherOverride && this.forceWeatherBySeasonEvent(eventWeatherOverride)) {
-      return;
-    }
+    const hasForcedWeather = eventWeatherOverride && this.forceWeatherBySeasonEvent(eventWeatherOverride);
+    this.dynamicWeatherEnabled = !hasForcedWeather && dynamicEnabled;
 
-    this.dynamicWeatherEnabled = dynamicEnabled;
-    this._selectInitialWeather();
+    if (!hasForcedWeather) {
+      this._selectInitialWeather();
+    }
 
     this.raceWeatherSnapshots = [];
     this._recordRaceWeatherSnapshot();
