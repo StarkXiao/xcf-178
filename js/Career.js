@@ -327,13 +327,13 @@ const SponsorContracts = [
     icon: '🌀',
     color: '#ff00ff',
     bgColor: '#330033',
-    description: '为漂移高手提供顶级装备赞助',
+    description: '为漂移高手提供顶级装备赞助，解锁疾风战车',
     conditions: [
       { type: SponsorConditionType.DRIFT_DISTANCE, description: '单场漂移距离 ≥ 2000', target: 2000, current: 0 }
     ],
     coinBonus: 0.20,
     shopDiscount: 0.10,
-    unlockVehicles: [],
+    unlockVehicles: ['gale'],
     unlockEngines: [],
     unlockTires: [3],
     requiredStage: 'stage2',
@@ -364,14 +364,14 @@ const SponsorContracts = [
     icon: '🏆',
     color: '#ffd700',
     bgColor: '#332800',
-    description: '冠军专属高阶赞助合约',
+    description: '冠军专属高阶赞助合约，解锁雷霆极速',
     conditions: [
       { type: SponsorConditionType.RANK_FIRST, description: '获得第一名', target: 1, current: 0 },
       { type: SponsorConditionType.DRIFT_DISTANCE, description: '单场漂移距离 ≥ 1500', target: 1500, current: 0 }
     ],
     coinBonus: 0.30,
     shopDiscount: 0.15,
-    unlockVehicles: [],
+    unlockVehicles: ['thunder'],
     unlockEngines: [],
     unlockTires: [5],
     requiredStage: 'stage3',
@@ -383,13 +383,13 @@ const SponsorContracts = [
     icon: '🔥',
     color: '#ff6600',
     bgColor: '#331500',
-    description: '速度与激情的极致赞助',
+    description: '速度与激情的极致赞助，释放狂鲨之力',
     conditions: [
       { type: SponsorConditionType.WIN_STREAK, description: '连胜3场', target: 3, current: 0 }
     ],
     coinBonus: 0.25,
     shopDiscount: 0.10,
-    unlockVehicles: [],
+    unlockVehicles: ['shark'],
     unlockEngines: [4],
     unlockTires: [],
     requiredStage: 'stage3',
@@ -409,13 +409,15 @@ const SponsorContracts = [
     ],
     coinBonus: 0.50,
     shopDiscount: 0.25,
-    unlockVehicles: [],
-    unlockEngines: [],
-    unlockTires: [],
+    unlockVehicles: ['thunder', 'gale', 'shark'],
+    unlockEngines: [3, 4],
+    unlockTires: [3, 5],
     requiredStage: 'stage4',
     tier: 3
   }
 ];
+
+const DefaultUnlockedVehicles = ['phantom'];
 
 const SponsorContractKeys = SponsorContracts.map(s => s.id);
 
@@ -852,58 +854,67 @@ class CareerManager {
       const progress = this.sponsorProgress[sponsorId];
       if (!progress) continue;
 
-      let conditionsMet = true;
+      let perRaceConditionsMet = true;
 
       for (let i = 0; i < sponsor.conditions.length; i++) {
         const cond = sponsor.conditions[i];
         const prog = progress.conditions[i];
         if (!prog) continue;
 
+        let thisRaceMet = false;
         switch (cond.type) {
           case SponsorConditionType.RANK_FIRST:
-            if (rank === 1) prog.current = Math.min(prog.current + 1, cond.target);
-            if (prog.current < cond.target) conditionsMet = false;
+            thisRaceMet = rank === 1;
+            if (thisRaceMet) prog.current = Math.min(prog.current + 1, cond.target);
             break;
           case SponsorConditionType.RANK_TOP3:
-            if (rank <= 3) prog.current = Math.min(prog.current + 1, cond.target);
-            if (prog.current < cond.target) conditionsMet = false;
+            thisRaceMet = rank <= 3;
+            if (thisRaceMet) prog.current = Math.min(prog.current + 1, cond.target);
             break;
           case SponsorConditionType.DRIFT_DISTANCE:
+            thisRaceMet = driftDistance >= cond.target;
             prog.current = Math.max(prog.current, driftDistance);
-            if (prog.current < cond.target) conditionsMet = false;
             break;
           case SponsorConditionType.ZERO_COLLISION:
-            if (bikeCollisions === 0) prog.current = cond.target;
-            if (prog.current < cond.target) conditionsMet = false;
+            thisRaceMet = bikeCollisions === 0;
+            if (thisRaceMet) prog.current = cond.target;
+            else prog.current = 0;
             break;
           case SponsorConditionType.ZERO_OBSTACLE:
-            if (obstacleCollisions === 0) prog.current = cond.target;
-            if (prog.current < cond.target) conditionsMet = false;
+            thisRaceMet = obstacleCollisions === 0;
+            if (thisRaceMet) prog.current = cond.target;
+            else prog.current = 0;
             break;
           case SponsorConditionType.COMPLETE_STAGE:
+            thisRaceMet = this.completedStages.length >= cond.target;
             prog.current = this.completedStages.length;
-            if (prog.current < cond.target) conditionsMet = false;
             break;
           case SponsorConditionType.WIN_STREAK:
+            thisRaceMet = this._winStreak >= cond.target;
             prog.current = Math.max(prog.current, this._winStreak);
-            if (prog.current < cond.target) conditionsMet = false;
             break;
           case SponsorConditionType.DRIFT_PER_LAP:
+            thisRaceMet = driftPerLap >= cond.target;
             prog.current = Math.max(prog.current, driftPerLap);
-            if (prog.current < cond.target) conditionsMet = false;
             break;
         }
+
+        if (!thisRaceMet) perRaceConditionsMet = false;
       }
 
-      const sponsorBonus = Math.floor(baseReward * sponsor.coinBonus);
-      bonusCoins += sponsorBonus;
+      let sponsorBonus = 0;
+      if (perRaceConditionsMet) {
+        sponsorBonus = Math.floor(baseReward * sponsor.coinBonus);
+        bonusCoins += sponsorBonus;
+      }
+
       details.push({
         sponsorId: sponsor.id,
         sponsorName: sponsor.name,
         icon: sponsor.icon,
         color: sponsor.color,
         bonusCoins: sponsorBonus,
-        conditionsMet: conditionsMet,
+        conditionsMet: perRaceConditionsMet,
         conditions: this.getSponsorConditionProgress(sponsorId)
       });
     }
@@ -981,5 +992,41 @@ class CareerManager {
 
   getLastSponsorBonus() {
     return this._sponsorBonusCoins || 0;
+  }
+
+  isVehicleUnlocked(vehicleId) {
+    if (DefaultUnlockedVehicles.includes(vehicleId)) return true;
+    const sponsorUnlocked = this.getSponsorUnlockedVehicles();
+    return sponsorUnlocked.includes(vehicleId);
+  }
+
+  getVehicleUnlockSource(vehicleId) {
+    if (DefaultUnlockedVehicles.includes(vehicleId)) {
+      return { type: 'default', label: '默认解锁', icon: '✅', color: '#00ff66' };
+    }
+    for (const sponsorId of this.activeSponsors) {
+      const sponsor = this.getSponsorById(sponsorId);
+      if (sponsor && sponsor.unlockVehicles && sponsor.unlockVehicles.includes(vehicleId)) {
+        return {
+          type: 'sponsor',
+          label: `${sponsor.icon} ${sponsor.name}`,
+          icon: sponsor.icon,
+          color: sponsor.color,
+          sponsorId: sponsor.id
+        };
+      }
+    }
+    const potentialSponsor = SponsorContracts.find(s => s.unlockVehicles && s.unlockVehicles.includes(vehicleId));
+    if (potentialSponsor) {
+      return {
+        type: 'locked',
+        label: `需签约「${potentialSponsor.icon} ${potentialSponsor.name}」`,
+        icon: '🔒',
+        color: '#888',
+        sponsorId: potentialSponsor.id,
+        requiredStage: potentialSponsor.requiredStage
+      };
+    }
+    return { type: 'unknown', label: '未解锁', icon: '❓', color: '#666' };
   }
 }

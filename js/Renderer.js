@@ -2409,11 +2409,13 @@ class Renderer {
     const selectedKey = VehicleTypeKeys[game.vehicleSelectCursor];
     const selectedVehicle = VehicleTypes[selectedKey];
     const isCurrentVehicle = selectedKey === game.selectedVehicle;
+    const isUnlocked = game.career.isVehicleUnlocked(selectedKey);
+    const unlockSource = game.career.getVehicleUnlockSource(selectedKey);
 
     if (isPortrait) {
-      this._drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+      this._drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY);
     } else {
-      this._drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+      this._drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY);
     }
 
     ctx.restore();
@@ -2440,7 +2442,7 @@ class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
   }
 
-  _drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+  _drawVehicleSelectLandscape(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY) {
     const ctx = this.ctx;
 
     const previewPanelX = 60;
@@ -2453,12 +2455,12 @@ class Renderer {
     const listPanelW = this.width - listPanelX - 60;
     const listPanelH = this.height - 180;
 
-    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle);
+    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource);
     this._drawVehicleListPanel(listPanelX, listPanelY, listPanelW, listPanelH, game, selectedKey);
-    this._drawActionButtons(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey);
+    this._drawActionButtons(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey, isUnlocked, unlockSource);
   }
 
-  _drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+  _drawVehicleSelectPortrait(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY) {
     const ctx = this.ctx;
 
     const previewH = 200 * uiScale;
@@ -2471,12 +2473,12 @@ class Renderer {
     const listW = Math.min(360 * uiScale, this.width * 0.92);
     const listX = centerX - listW / 2;
 
-    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle);
+    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource);
     this._drawVehicleListPanel(listX, listY, listW, listH, game, selectedKey);
-    this._drawActionButtons(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey);
+    this._drawActionButtons(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey, isUnlocked, unlockSource);
   }
 
-  _drawPreviewPanel(x, y, w, h, vehicle, isCurrent) {
+  _drawPreviewPanel(x, y, w, h, vehicle, isCurrent, isUnlocked = true, unlockSource = null) {
     const ctx = this.ctx;
     const isPortrait = this.isPortrait();
     const uiScale = this._getUIScale();
@@ -2486,10 +2488,11 @@ class Renderer {
     ctx.roundRect(x, y, w, h, 12);
     ctx.fill();
 
-    ctx.strokeStyle = vehicle.color;
+    const borderColor = isUnlocked ? vehicle.color : '#555';
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = 2;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = vehicle.color;
+    ctx.shadowBlur = isUnlocked ? 15 : 0;
+    ctx.shadowColor = borderColor;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 12);
     ctx.stroke();
@@ -2516,37 +2519,72 @@ class Renderer {
       ctx.fillText('✓ 当前使用', x + w - badgeW / 2 - 12, y + 12 + badgeH * 0.72);
     }
 
+    if (unlockSource) {
+      const sourceBadgeH = 22;
+      const sourceText = `${unlockSource.icon} ${unlockSource.label}`;
+      ctx.font = 'bold 11px monospace';
+      const sourceBadgeW = Math.min(ctx.measureText(sourceText).width + 24, w - 36);
+      const sourceBadgeX = x + 12;
+      const sourceBadgeY = y + 12;
+      ctx.fillStyle = isUnlocked ? 'rgba(0, 245, 255, 0.15)' : 'rgba(255, 100, 100, 0.15)';
+      ctx.beginPath();
+      ctx.roundRect(sourceBadgeX, sourceBadgeY, sourceBadgeW, sourceBadgeH, 4);
+      ctx.fill();
+      ctx.strokeStyle = unlockSource.color || (isUnlocked ? '#00f5ff' : '#ff6666');
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = unlockSource.color || (isUnlocked ? '#00f5ff' : '#ff6666');
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(sourceText, sourceBadgeX + sourceBadgeW / 2, sourceBadgeY + sourceBadgeH * 0.72);
+    }
+
     const previewSize = Math.min(w * 0.5, h * 0.4);
     const previewY = y + h * 0.28;
     const scale = previewSize / 50;
-    this._drawVehiclePreview(x + w / 2, previewY, vehicle, scale, true);
+
+    if (isUnlocked) {
+      this._drawVehiclePreview(x + w / 2, previewY, vehicle, scale, true);
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      this._drawVehiclePreview(x + w / 2, previewY, vehicle, scale, false);
+      ctx.restore();
+      const lockIconSize = previewSize * 0.8;
+      ctx.font = `${lockIconSize}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', x + w / 2, previewY);
+      ctx.textBaseline = 'alphabetic';
+    }
 
     const nameSize = isPortrait ? 24 * uiScale : 28;
     const subSize = isPortrait ? 13 * uiScale : 15;
     const nameY = y + h * 0.55;
 
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = vehicle.color;
-    ctx.fillStyle = vehicle.color;
+    const textColor = isUnlocked ? vehicle.color : '#888';
+    ctx.shadowBlur = isUnlocked ? 12 : 0;
+    ctx.shadowColor = textColor;
+    ctx.fillStyle = textColor;
     ctx.font = `bold ${nameSize}px monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(vehicle.name, x + w / 2, nameY);
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = '#aaa';
+    ctx.fillStyle = isUnlocked ? '#aaa' : '#555';
     ctx.font = `${subSize}px monospace`;
     ctx.fillText(vehicle.subtitle, x + w / 2, nameY + subSize + 6);
 
     const descSize = isPortrait ? 11 * uiScale : 12;
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = isUnlocked ? '#888' : '#444';
     ctx.font = `${descSize}px monospace`;
     ctx.fillText(vehicle.description, x + w / 2, nameY + subSize + descSize + 18);
 
     const statsStartY = nameY + subSize + descSize + 45;
-    this._drawDetailedStats(x + 25, statsStartY, w - 50, vehicle, isPortrait, uiScale);
+    this._drawDetailedStats(x + 25, statsStartY, w - 50, vehicle, isPortrait, uiScale, isUnlocked);
   }
 
-  _drawDetailedStats(x, y, w, vehicle, isPortrait, uiScale) {
+  _drawDetailedStats(x, y, w, vehicle, isPortrait, uiScale, isUnlocked = true) {
     const ctx = this.ctx;
     const statNames = ['最高速度', '加速能力', '转向操控', '氮气系统'];
     const statKeys = ['speed', 'accel', 'handling', 'nitro'];
@@ -2561,33 +2599,42 @@ class Renderer {
     const labelSize = isPortrait ? 10 * uiScale : 11;
     const valueSize = isPortrait ? 10 * uiScale : 11;
 
+    const labelColor = isUnlocked ? '#999' : '#555';
+    const valueColor = isUnlocked ? vehicle.color : '#666';
+    const barBgColor = isUnlocked ? 'rgba(30, 30, 60, 0.8)' : 'rgba(20, 20, 40, 0.6)';
+
     statKeys.forEach((statKey, si) => {
       const sy = y + si * statSpacing;
       const value = vehicle.stats[statKey];
 
-      ctx.fillStyle = '#999';
+      ctx.fillStyle = labelColor;
       ctx.font = `${labelSize}px monospace`;
       ctx.textAlign = 'left';
       ctx.fillText(statNames[si], x, sy);
 
-      ctx.fillStyle = vehicle.color;
+      ctx.fillStyle = valueColor;
       ctx.font = `bold ${valueSize}px monospace`;
       ctx.textAlign = 'right';
       ctx.fillText(statValues[si], x + w, sy);
 
       const barY = sy + 6;
-      ctx.fillStyle = 'rgba(30, 30, 60, 0.8)';
+      ctx.fillStyle = barBgColor;
       ctx.beginPath();
       ctx.roundRect(x, barY, w, barH, 4);
       ctx.fill();
 
       const fillW = w * (value / 5);
-      const statGrad = ctx.createLinearGradient(x, 0, x + w, 0);
-      statGrad.addColorStop(0, vehicle.color);
-      statGrad.addColorStop(1, vehicle.accentColor);
-      ctx.fillStyle = statGrad;
-      ctx.shadowBlur = 6;
-      ctx.shadowColor = vehicle.color;
+      if (isUnlocked) {
+        const statGrad = ctx.createLinearGradient(x, 0, x + w, 0);
+        statGrad.addColorStop(0, vehicle.color);
+        statGrad.addColorStop(1, vehicle.accentColor);
+        ctx.fillStyle = statGrad;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = vehicle.color;
+      } else {
+        ctx.fillStyle = '#444';
+        ctx.shadowBlur = 0;
+      }
       ctx.beginPath();
       ctx.roundRect(x, barY, fillW, barH, 4);
       ctx.fill();
@@ -2638,17 +2685,20 @@ class Renderer {
       const iy = startY + idx * (itemH + itemGap);
       const isSelected = key === selectedKey;
       const isCurrent = key === game.selectedVehicle;
+      const itemUnlocked = game.career.isVehicleUnlocked(key);
+      const itemUnlockSource = game.career.getVehicleUnlockSource(key);
 
       if (isSelected) {
-        ctx.fillStyle = 'rgba(0, 245, 255, 0.08)';
+        const selBorderColor = itemUnlocked ? vehicle.color : '#777';
+        ctx.fillStyle = itemUnlocked ? 'rgba(0, 245, 255, 0.08)' : 'rgba(100, 100, 100, 0.06)';
         ctx.beginPath();
         ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
         ctx.fill();
 
-        ctx.strokeStyle = vehicle.color;
+        ctx.strokeStyle = selBorderColor;
         ctx.lineWidth = 2;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = vehicle.color;
+        ctx.shadowBlur = itemUnlocked ? 10 : 0;
+        ctx.shadowColor = selBorderColor;
         ctx.beginPath();
         ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
         ctx.stroke();
@@ -2659,23 +2709,41 @@ class Renderer {
       const thumbX = x + 25 + thumbSize / 2;
       const thumbY = iy + itemH / 2;
       const thumbScale = thumbSize / 50;
-      this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+
+      if (itemUnlocked) {
+        this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+      } else {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, false);
+        ctx.restore();
+        ctx.font = `${thumbSize * 0.7}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', thumbX, thumbY);
+        ctx.textBaseline = 'alphabetic';
+      }
 
       const nameX = x + 50 + thumbSize;
       const nameSize = isPortrait ? 14 * uiScale : 16;
       const subSize = isPortrait ? 10 * uiScale : 11;
 
-      ctx.fillStyle = vehicle.color;
-      ctx.shadowBlur = isSelected ? 8 : 0;
-      ctx.shadowColor = vehicle.color;
+      const nameColor = itemUnlocked ? vehicle.color : '#777';
+      ctx.fillStyle = nameColor;
+      ctx.shadowBlur = (isSelected && itemUnlocked) ? 8 : 0;
+      ctx.shadowColor = nameColor;
       ctx.font = `bold ${nameSize}px monospace`;
       ctx.textAlign = 'left';
       ctx.fillText(vehicle.name, nameX, iy + itemH * 0.4);
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = '#777';
+      ctx.fillStyle = itemUnlocked ? '#777' : '#555';
       ctx.font = `${subSize}px monospace`;
-      ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+      if (itemUnlocked) {
+        ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+      } else if (itemUnlockSource) {
+        ctx.fillText(itemUnlockSource.label, nameX, iy + itemH * 0.7);
+      }
 
       if (isCurrent) {
         const badgeW = 44;
@@ -2701,6 +2769,7 @@ class Renderer {
       const miniStatH = isPortrait ? 3 * uiScale : 4;
       const miniStatKeys = ['speed', 'accel', 'handling', 'nitro'];
       const miniStatSpacing = isPortrait ? 2 * uiScale : 2;
+      const miniBarColor = itemUnlocked ? vehicle.color : '#555';
 
       miniStatKeys.forEach((statKey, si) => {
         const sy = miniStatsY + si * (miniStatH + miniStatSpacing) + 12;
@@ -2710,8 +2779,8 @@ class Renderer {
         ctx.fillStyle = 'rgba(40, 40, 70, 0.6)';
         ctx.fillRect(nameX, sy, miniStatW, miniStatH);
 
-        ctx.fillStyle = vehicle.color;
-        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = miniBarColor;
+        ctx.globalAlpha = itemUnlocked ? 0.8 : 0.4;
         ctx.fillRect(nameX, sy, fillW, miniStatH);
         ctx.globalAlpha = 1;
       });
@@ -2724,7 +2793,7 @@ class Renderer {
     ctx.fillText('↑↓ 或 点击选择车辆', x + w / 2, y + h - 15);
   }
 
-  _drawActionButtons(x, y, w, game, selectedVehicle, selectedKey) {
+  _drawActionButtons(x, y, w, game, selectedVehicle, selectedKey, isUnlocked, unlockSource) {
     const ctx = this.ctx;
     const isPortrait = this.isPortrait();
     const uiScale = this._getUIScale();
@@ -2736,13 +2805,22 @@ class Renderer {
     const confirmX = x + btnW + btnGap;
 
     this._drawVehicleButton(cancelX, y, btnW, btnH, '返回', '#666', '#444', false);
-    this._drawVehicleButton(confirmX, y, btnW, btnH, '确认选择', selectedVehicle.color, selectedVehicle.accentColor, true);
+    if (isUnlocked) {
+      this._drawVehicleButton(confirmX, y, btnW, btnH, '确认选择', selectedVehicle.color, selectedVehicle.accentColor, true);
+    } else {
+      this._drawVehicleButton(confirmX, y, btnW, btnH, '🔒 未解锁', '#888', '#555', false);
+    }
 
     const hintSize = isPortrait ? 10 * uiScale : 11;
     ctx.fillStyle = '#555';
     ctx.font = `${hintSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('ESC 返回  |  空格/回车 确认', x + w / 2, y + btnH + 18);
+    if (isUnlocked) {
+      ctx.fillText('ESC 返回  |  空格/回车 确认', x + w / 2, y + btnH + 18);
+    } else if (unlockSource) {
+      ctx.fillStyle = unlockSource.color || '#ff6666';
+      ctx.fillText(unlockSource.label, x + w / 2, y + btnH + 18);
+    }
   }
 
   _drawVehicleButton(x, y, w, h, label, color, accentColor, primary) {
@@ -7587,8 +7665,24 @@ class Renderer {
       ctx.fillText(`🔓 解锁轮胎: ${sponsor.unlockTires.map(i => TireTypes[i] ? TireTypes[i].name : `#${i}`).join(', ')}`, x + padding, unlockY + 14);
     }
 
-    const condStartY = infoY + infoH + (sponsor.unlockEngines && sponsor.unlockEngines.length > 0 ? 38 : 22) * uiScale +
-      (sponsor.unlockTires && sponsor.unlockTires.length > 0 ? 22 : 0) * uiScale;
+    if (sponsor.unlockVehicles && sponsor.unlockVehicles.length > 0) {
+      const prevOffset =
+        (sponsor.unlockEngines && sponsor.unlockEngines.length > 0 ? 24 : 0) +
+        (sponsor.unlockTires && sponsor.unlockTires.length > 0 ? 24 : 0);
+      const unlockY = infoY + infoH + (prevOffset > 0 ? prevOffset + 8 : 8) * uiScale;
+      const unlockSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = '#ffd700';
+      ctx.font = `bold ${unlockSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`🏎️ 解锁车辆: ${sponsor.unlockVehicles.map(v => VehicleTypes[v] ? VehicleTypes[v].name : v).join(', ')}`, x + padding, unlockY + 14);
+    }
+
+    const unlockBlockCount =
+      (sponsor.unlockEngines && sponsor.unlockEngines.length > 0 ? 1 : 0) +
+      (sponsor.unlockTires && sponsor.unlockTires.length > 0 ? 1 : 0) +
+      (sponsor.unlockVehicles && sponsor.unlockVehicles.length > 0 ? 1 : 0);
+    const unlockSpacing = unlockBlockCount > 0 ? 8 + unlockBlockCount * 22 : 22;
+    const condStartY = infoY + infoH + unlockSpacing * uiScale;
 
     ctx.fillStyle = '#888';
     const condTitleSize = isPortrait ? 12 * uiScale : 14;
@@ -9249,17 +9343,19 @@ class Renderer {
     const selectedKey = VehicleTypeKeys[game.vehicleSelectCursorP2];
     const selectedVehicle = VehicleTypes[selectedKey];
     const isCurrentVehicle = selectedKey === game.selectedVehicleP2;
+    const isUnlocked = game.career.isVehicleUnlocked(selectedKey);
+    const unlockSource = game.career.getVehicleUnlockSource(selectedKey);
 
     if (isPortrait) {
-      this._drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+      this._drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY);
     } else {
-      this._drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY);
+      this._drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY);
     }
 
     ctx.restore();
   }
 
-  _drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+  _drawVehicleSelectLandscapeP2(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY) {
     const previewPanelX = 60;
     const previewPanelY = 100;
     const previewPanelW = 380;
@@ -9270,12 +9366,12 @@ class Renderer {
     const listPanelW = this.width - listPanelX - 60;
     const listPanelH = this.height - 180;
 
-    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle);
+    this._drawPreviewPanel(previewPanelX, previewPanelY, previewPanelW, previewPanelH, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource);
     this._drawVehicleListPanelP2(listPanelX, listPanelY, listPanelW, listPanelH, game, selectedKey);
-    this._drawActionButtonsP2(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey);
+    this._drawActionButtonsP2(this.width / 2 - 160, this.height - 65, 320, game, selectedVehicle, selectedKey, isUnlocked, unlockSource);
   }
 
-  _drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, uiScale, centerX, centerY) {
+  _drawVehicleSelectPortraitP2(game, selectedKey, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource, uiScale, centerX, centerY) {
     const previewH = 200 * uiScale;
     const previewY = 70 * uiScale;
     const previewW = Math.min(340 * uiScale, this.width * 0.9);
@@ -9286,9 +9382,9 @@ class Renderer {
     const listW = Math.min(360 * uiScale, this.width * 0.92);
     const listX = centerX - listW / 2;
 
-    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle);
+    this._drawPreviewPanel(previewX, previewY, previewW, previewH, selectedVehicle, isCurrentVehicle, isUnlocked, unlockSource);
     this._drawVehicleListPanelP2(listX, listY, listW, listH, game, selectedKey);
-    this._drawActionButtonsP2(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey);
+    this._drawActionButtonsP2(centerX - 140 * uiScale, this.height - 75 * uiScale, 280 * uiScale, game, selectedVehicle, selectedKey, isUnlocked, unlockSource);
   }
 
   _drawVehicleListPanelP2(x, y, w, h, game, selectedKey) {
@@ -9324,17 +9420,20 @@ class Renderer {
       const iy = startY + idx * (itemH + itemGap);
       const isSelected = key === selectedKey;
       const isCurrent = key === game.selectedVehicleP2;
+      const itemUnlocked = game.career.isVehicleUnlocked(key);
+      const itemUnlockSource = game.career.getVehicleUnlockSource(key);
 
       if (isSelected) {
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.08)';
+        const selBorderColor = itemUnlocked ? vehicle.color : '#777';
+        ctx.fillStyle = itemUnlocked ? 'rgba(255, 0, 255, 0.08)' : 'rgba(100, 100, 100, 0.06)';
         ctx.beginPath();
         ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
         ctx.fill();
 
-        ctx.strokeStyle = vehicle.color;
+        ctx.strokeStyle = selBorderColor;
         ctx.lineWidth = 2;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = vehicle.color;
+        ctx.shadowBlur = itemUnlocked ? 10 : 0;
+        ctx.shadowColor = selBorderColor;
         ctx.beginPath();
         ctx.roundRect(x + 12, iy, w - 24, itemH, 8);
         ctx.stroke();
@@ -9345,23 +9444,41 @@ class Renderer {
       const thumbX = x + 25 + thumbSize / 2;
       const thumbY = iy + itemH / 2;
       const thumbScale = thumbSize / 50;
-      this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+
+      if (itemUnlocked) {
+        this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, isSelected);
+      } else {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        this._drawVehiclePreview(thumbX, thumbY, vehicle, thumbScale * 0.8, false);
+        ctx.restore();
+        ctx.font = `${thumbSize * 0.7}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🔒', thumbX, thumbY);
+        ctx.textBaseline = 'alphabetic';
+      }
 
       const nameX = x + 50 + thumbSize;
       const nameSize = isPortrait ? 14 * uiScale : 16;
       const subSize = isPortrait ? 10 * uiScale : 11;
 
-      ctx.fillStyle = vehicle.color;
-      ctx.shadowBlur = isSelected ? 8 : 0;
-      ctx.shadowColor = vehicle.color;
+      const nameColor = itemUnlocked ? vehicle.color : '#777';
+      ctx.fillStyle = nameColor;
+      ctx.shadowBlur = (isSelected && itemUnlocked) ? 8 : 0;
+      ctx.shadowColor = nameColor;
       ctx.font = `bold ${nameSize}px monospace`;
       ctx.textAlign = 'left';
       ctx.fillText(vehicle.name, nameX, iy + itemH * 0.4);
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = '#777';
+      ctx.fillStyle = itemUnlocked ? '#777' : '#555';
       ctx.font = `${subSize}px monospace`;
-      ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+      if (itemUnlocked) {
+        ctx.fillText(vehicle.subtitle, nameX, iy + itemH * 0.7);
+      } else if (itemUnlockSource) {
+        ctx.fillText(itemUnlockSource.label, nameX, iy + itemH * 0.7);
+      }
 
       if (isCurrent) {
         const badgeW = 44;
@@ -9380,6 +9497,28 @@ class Renderer {
         ctx.textAlign = 'center';
         ctx.fillText('P2', x + w - badgeW / 2 - 20, iy + itemH / 2 + 3);
       }
+
+      const rightPadding = isCurrent ? 75 : 20;
+      const miniStatsY = iy + itemH * 0.42;
+      const miniStatW = w - (50 + thumbSize) - rightPadding;
+      const miniStatH = isPortrait ? 3 * uiScale : 4;
+      const miniStatKeys = ['speed', 'accel', 'handling', 'nitro'];
+      const miniStatSpacing = isPortrait ? 2 * uiScale : 2;
+      const miniBarColor = itemUnlocked ? vehicle.color : '#555';
+
+      miniStatKeys.forEach((statKey, si) => {
+        const sy = miniStatsY + si * (miniStatH + miniStatSpacing) + 12;
+        const value = vehicle.stats[statKey];
+        const fillW = miniStatW * (value / 5);
+
+        ctx.fillStyle = 'rgba(40, 40, 70, 0.6)';
+        ctx.fillRect(nameX, sy, miniStatW, miniStatH);
+
+        ctx.fillStyle = miniBarColor;
+        ctx.globalAlpha = itemUnlocked ? 0.8 : 0.4;
+        ctx.fillRect(nameX, sy, fillW, miniStatH);
+        ctx.globalAlpha = 1;
+      });
     });
 
     const hintSize = isPortrait ? 9 * uiScale : 10;
@@ -9389,7 +9528,7 @@ class Renderer {
     ctx.fillText('↑↓ 或 点击选择P2车辆', x + w / 2, y + h - 15);
   }
 
-  _drawActionButtonsP2(x, y, w, game, selectedVehicle, selectedKey) {
+  _drawActionButtonsP2(x, y, w, game, selectedVehicle, selectedKey, isUnlocked, unlockSource) {
     const ctx = this.ctx;
     const isPortrait = this.isPortrait();
     const uiScale = this._getUIScale();
@@ -9401,12 +9540,21 @@ class Renderer {
     const confirmX = x + btnW + btnGap;
 
     this._drawVehicleButton(cancelX, y, btnW, btnH, '返回', '#666', '#444', false);
-    this._drawVehicleButton(confirmX, y, btnW, btnH, 'P2确认', selectedVehicle.color, selectedVehicle.accentColor, true);
+    if (isUnlocked) {
+      this._drawVehicleButton(confirmX, y, btnW, btnH, 'P2确认', selectedVehicle.color, selectedVehicle.accentColor, true);
+    } else {
+      this._drawVehicleButton(confirmX, y, btnW, btnH, '🔒 未解锁', '#888', '#555', false);
+    }
 
     const hintSize = isPortrait ? 10 * uiScale : 11;
     ctx.fillStyle = '#555';
     ctx.font = `${hintSize}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('ESC 返回  |  空格/回车 P2确认', x + w / 2, y + btnH + 18);
+    if (isUnlocked) {
+      ctx.fillText('ESC 返回  |  空格/回车 P2确认', x + w / 2, y + btnH + 18);
+    } else if (unlockSource) {
+      ctx.fillStyle = unlockSource.color || '#ff6666';
+      ctx.fillText(unlockSource.label, x + w / 2, y + btnH + 18);
+    }
   }
 }

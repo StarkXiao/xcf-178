@@ -191,6 +191,12 @@ class Game {
     this._clubQuestClaimFlash = 0;
 
     this.career = new CareerManager();
+    if (!this.career.isVehicleUnlocked(this.selectedVehicle)) {
+      this.selectedVehicle = 'phantom';
+      this.vehicleSelectCursor = VehicleTypeKeys.indexOf('phantom');
+    }
+    this.selectedVehicleP2 = 'phantom';
+    this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
     this.garage = new GarageManager(this.career);
     this.careerStageCursor = 0;
     this.careerEventCursor = 0;
@@ -1569,7 +1575,12 @@ class Game {
   }
 
   _confirmVehicleSelection() {
-    this.selectedVehicle = VehicleTypeKeys[this.vehicleSelectCursor];
+    const selectedKey = VehicleTypeKeys[this.vehicleSelectCursor];
+    if (!this.career.isVehicleUnlocked(selectedKey)) {
+      this.touchManager.vibrate('error');
+      return;
+    }
+    this.selectedVehicle = selectedKey;
     this._saveVehicleSelection(this.selectedVehicle);
     this.state = GameState.MENU;
     this.touchManager.vibrate('menuSelect');
@@ -1608,7 +1619,12 @@ class Game {
   }
 
   _confirmVehicleSelectionP2() {
-    this.selectedVehicleP2 = VehicleTypeKeys[this.vehicleSelectCursorP2];
+    const selectedKey = VehicleTypeKeys[this.vehicleSelectCursorP2];
+    if (!this.career.isVehicleUnlocked(selectedKey)) {
+      this.touchManager.vibrate('error');
+      return;
+    }
+    this.selectedVehicleP2 = selectedKey;
     this._isSplitScreen = true;
     this.input.enableSplitScreen(true);
     this.touchManager.setSplitScreenMode(true);
