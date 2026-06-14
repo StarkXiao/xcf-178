@@ -16,12 +16,13 @@ const LeaderboardTrackColors = {
   stage4: '#ff6600'
 };
 
-const LeaderboardFilterKeys = ['bestTime', 'bestLap', 'mostWins'];
+const LeaderboardFilterKeys = ['bestTime', 'bestLap', 'mostWins', 'mostPodiums'];
 
 const LeaderboardFilterNames = {
   bestTime: '总用时',
   bestLap: '最快圈',
-  mostWins: '胜场数'
+  mostWins: '胜场数',
+  mostPodiums: '登台数'
 };
 
 const LeaderboardSeasonKeys = ['all', 'spring', 'summer', 'autumn', 'winter'];
@@ -116,6 +117,7 @@ class SeasonLeaderboardManager {
         difficulty: validDifficulties.includes(r.difficulty) ? r.difficulty : 'normal',
         weatherType: r.weatherType || 'clear',
         wins: Math.max(0, Math.floor(r.wins || 0)),
+        podiums: Math.max(0, Math.floor(r.podiums || (r.rank && r.rank <= 3 ? 1 : 0))),
         date: typeof r.date === 'number' ? r.date : Date.now()
       }));
   }
@@ -199,10 +201,6 @@ class SeasonLeaderboardManager {
     const safeVehicle = typeof vehicleType === 'string' ? vehicleType.substring(0, 32) : 'phantom';
     const safeWeather = typeof weatherType === 'string' ? weatherType.substring(0, 32) : 'clear';
 
-    const existingIdx = this.records.findIndex(r =>
-      r.eventId === eventId && r.nickname === this.nickname
-    );
-
     const entry = {
       eventId: eventId.substring(0, 64),
       stageId: safeStageId,
@@ -214,47 +212,28 @@ class SeasonLeaderboardManager {
       vehicleType: safeVehicle,
       difficulty: safeDiff,
       weatherType: safeWeather,
-      wins: 0,
+      wins: rank === 1 ? 1 : 0,
+      podiums: rank <= 3 ? 1 : 0,
       date: Date.now()
     };
 
-    let updated = false;
-    let isNewRecord = true;
+    const playerRecords = this.records.filter(r =>
+      r.nickname === this.nickname && r.eventId === entry.eventId
+    );
 
-    if (existingIdx >= 0) {
-      const existing = this.records[existingIdx];
-      isNewRecord = false;
+    const isNewRecord = playerRecords.length === 0;
+    const prevBestTime = playerRecords.length > 0
+      ? Math.min(...playerRecords.map(r => r.time))
+      : Infinity;
+    const prevBestLap = playerRecords.length > 0
+      ? Math.min(...playerRecords.map(r => r.bestLap))
+      : Infinity;
 
-      if (time < existing.time) {
-        entry.time = time;
-        updated = true;
-      } else {
-        entry.time = existing.time;
-      }
+    this.records.push(entry);
 
-      if (bestLap < existing.bestLap) {
-        entry.bestLap = bestLap;
-        updated = true;
-      } else {
-        entry.bestLap = existing.bestLap;
-      }
-
-      if (rank === 1) {
-        entry.wins = (existing.wins || 0) + 1;
-        updated = true;
-      } else {
-        entry.wins = existing.wins || 0;
-      }
-
-      entry.date = Date.now();
-      this.records[existingIdx] = entry;
-    } else {
-      if (rank === 1) {
-        entry.wins = 1;
-      }
-      this.records.push(entry);
-      updated = true;
-    }
+    const updated = true;
+    const isNewBestTime = time < prevBestTime;
+    const isNewBestLap = bestLap < prevBestLap;
 
     this._pruneOldRecords();
     this._save();
@@ -262,8 +241,9 @@ class SeasonLeaderboardManager {
     return {
       updated,
       isNewRecord,
-      isNewBestTime: existingIdx >= 0 ? time < this.records[existingIdx].time : true,
-      isNewBestLap: existingIdx >= 0 ? bestLap < this.records[existingIdx].bestLap : true
+      isNewBestTime,
+      isNewBestLap,
+      totalRacesForEvent: playerRecords.length + 1
     };
   }
 
@@ -315,6 +295,7 @@ class SeasonLeaderboardManager {
           bestTime: Infinity,
           bestLap: Infinity,
           totalWins: 0,
+          totalPodiums: 0,
           raceCount: 0,
           bestVehicle: record.vehicleType,
           lastPlayed: 0
@@ -327,6 +308,7 @@ class SeasonLeaderboardManager {
       }
       if (record.bestLap < agg.bestLap) agg.bestLap = record.bestLap;
       agg.totalWins += (record.wins || 0);
+      agg.totalPodiums += (record.podiums || 0);
       agg.raceCount++;
       agg.lastPlayed = Math.max(agg.lastPlayed, record.date);
     }
@@ -356,6 +338,17 @@ class SeasonLeaderboardManager {
         break;
       case 'mostWins':
         entries.sort((a, b) => {
+          if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+          const aValid = a.bestTime < Infinity;
+          const bValid = b.bestTime < Infinity;
+          if (aValid !== bValid) return aValid ? -1 : 1;
+          if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime;
+          return b.raceCount - a.raceCount;
+        });
+        break;
+      case 'mostPodiums':
+        entries.sort((a, b) => {
+          if (b.totalPodiums !== a.totalPodiums) return b.totalPodiums - a.totalPodiums;
           if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
           const aValid = a.bestTime < Infinity;
           const bValid = b.bestTime < Infinity;
@@ -456,6 +449,7 @@ class SeasonLeaderboardManager {
     const totalRecords = this.records.length;
     const uniquePlayers = new Set(this.records.map(r => r.nickname)).size;
     const totalWins = this.records.reduce((sum, r) => sum + (r.wins || 0), 0);
+    const totalPodiums = this.records.reduce((sum, r) => sum + (r.podiums || 0), 0);
 
     const validTimes = this.records.map(r => r.time).filter(t => t < Infinity);
     const validLaps = this.records.map(r => r.bestLap).filter(t => t < Infinity);
@@ -475,6 +469,7 @@ class SeasonLeaderboardManager {
       totalRecords,
       uniquePlayers,
       totalWins,
+      totalPodiums,
       bestTime,
       bestLap,
       avgTime,

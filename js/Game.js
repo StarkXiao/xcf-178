@@ -3271,7 +3271,16 @@ class Game {
     } else {
       eventId = `quick_${this.difficulty}_${this.totalLaps}`;
       stageId = 'all';
-      season = 'spring';
+      const month = new Date().getMonth() + 1;
+      if (month >= 3 && month <= 5) {
+        season = 'spring';
+      } else if (month >= 6 && month <= 8) {
+        season = 'summer';
+      } else if (month >= 9 && month <= 11) {
+        season = 'autumn';
+      } else {
+        season = 'winter';
+      }
     }
 
     this.leaderboard.recordRace({
