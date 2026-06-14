@@ -218,8 +218,6 @@ class Game {
     this.bestLapRecords = this._loadBestLapRecords();
     this.isHistoricalRecord = false;
     this._isSplitScreen = false;
-    this.selectedVehicleP2 = 'thunder';
-    this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
     this._splitscreenResultData = null;
 
     this.raceEditor = null;
@@ -971,6 +969,9 @@ class Game {
   }
 
   _openVehicleSelect() {
+    if (!this.career.isVehicleUnlocked(this.selectedVehicle)) {
+      this.selectedVehicle = 'phantom';
+    }
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.state = GameState.VEHICLE_SELECT;
     this.touchManager.vibrate('menuSelect');
@@ -1548,20 +1549,16 @@ class Game {
 
   _updateVehicleSelect() {
     if (this.input.isMenuUp()) {
-      this.vehicleSelectCursor = (this.vehicleSelectCursor - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(-1, false);
     }
     if (this.input.isMenuDown()) {
-      this.vehicleSelectCursor = (this.vehicleSelectCursor + 1) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(1, false);
     }
     if (this.input.isMenuLeft()) {
-      this.vehicleSelectCursor = (this.vehicleSelectCursor - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(-1, false);
     }
     if (this.input.isMenuRight()) {
-      this.vehicleSelectCursor = (this.vehicleSelectCursor + 1) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(1, false);
     }
     if (this.input.isMenuConfirm()) {
       this._confirmVehicleSelection();
@@ -1572,6 +1569,21 @@ class Game {
       this.touchManager.vibrate('menuSelect');
     }
     this.input.clearJustPressed();
+  }
+
+  _advanceVehicleCursor(direction, isP2) {
+    const total = VehicleTypeKeys.length;
+    const cursorField = isP2 ? 'vehicleSelectCursorP2' : 'vehicleSelectCursor';
+    let idx = this[cursorField];
+    for (let i = 0; i < total; i++) {
+      idx = (idx + direction + total) % total;
+      if (this.career.isVehicleUnlocked(VehicleTypeKeys[idx])) {
+        this[cursorField] = idx;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+    this.touchManager.vibrate('error');
   }
 
   _confirmVehicleSelection() {
@@ -1588,20 +1600,16 @@ class Game {
 
   _updateVehicleSelectP2() {
     if (this.input.isMenuUp()) {
-      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(-1, true);
     }
     if (this.input.isMenuDown()) {
-      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 + 1) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(1, true);
     }
     if (this.input.isMenuLeft()) {
-      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(-1, true);
     }
     if (this.input.isMenuRight()) {
-      this.vehicleSelectCursorP2 = (this.vehicleSelectCursorP2 + 1) % VehicleTypeKeys.length;
-      this.touchManager.vibrate('menuSelect');
+      this._advanceVehicleCursor(1, true);
     }
     if (this.input.isMenuConfirm()) {
       this._confirmVehicleSelectionP2();
@@ -1796,6 +1804,11 @@ class Game {
       const itemW = listW - 24;
 
       if (x >= itemX && x <= itemX + itemW && y >= iy && y <= iy + itemH) {
+        const selectedKey = VehicleTypeKeys[i];
+        if (!this.career.isVehicleUnlocked(selectedKey)) {
+          this.touchManager.vibrate('error');
+          return true;
+        }
         this.vehicleSelectCursor = i;
         this.touchManager.vibrate('menuSelect');
         return true;
@@ -1870,6 +1883,11 @@ class Game {
         const itemW = listW - 24;
 
         if (x >= itemX && x <= itemX + itemW && y >= iy && y <= iy + itemH) {
+          const selectedKey = VehicleTypeKeys[i];
+          if (!this.career.isVehicleUnlocked(selectedKey)) {
+            this.touchManager.vibrate('error');
+            return;
+          }
           this.vehicleSelectCursorP2 = i;
           this.touchManager.vibrate('menuSelect');
           return;
@@ -2287,6 +2305,9 @@ class Game {
   startSplitScreen() {
     this._isWantedMode = false;
     this._isSplitScreen = true;
+    if (!this.career.isVehicleUnlocked(this.selectedVehicleP2)) {
+      this.selectedVehicleP2 = 'phantom';
+    }
     this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
     this.state = GameState.VEHICLE_SELECT_P2;
     this.touchManager.vibrate('menuSelect');
@@ -3313,6 +3334,9 @@ class Game {
 
   _changeSplitscreenVehicle() {
     this._splitscreenResultData = null;
+    if (!this.career.isVehicleUnlocked(this.selectedVehicleP2)) {
+      this.selectedVehicleP2 = 'phantom';
+    }
     this.vehicleSelectCursorP2 = VehicleTypeKeys.indexOf(this.selectedVehicleP2);
     this.state = GameState.VEHICLE_SELECT_P2;
     this.touchManager.vibrate('menuSelect');
