@@ -4,6 +4,7 @@ const GameState = {
   VEHICLE_SELECT_P2: 'vehicleSelectP2',
   GARAGE: 'garage',
   ACHIEVEMENTS: 'achievements',
+  CLUB_QUEST: 'clubQuest',
   CAREER_MAP: 'careerMap',
   CAREER_EVENT: 'careerEvent',
   CAREER_UPGRADE: 'careerUpgrade',
@@ -176,12 +177,17 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 11;
+    this.menuItemCount = 12;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
     this.achievementScrollY = 0;
     this.achievements = new AchievementManager();
+
+    this.clubQuest = new ClubQuestManager();
+    this.clubQuestCursor = 0;
+    this.clubQuestTab = 'daily';
+    this._clubQuestClaimFlash = 0;
 
     this.career = new CareerManager();
     this.garage = new GarageManager(this.career);
@@ -367,6 +373,8 @@ class Game {
         this.state = GameState.MENU;
         this.menuCursor = 3;
         this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.CLUB_QUEST) {
+        this._handleClubQuestClick(e);
       } else if (this.state === GameState.CAREER_MAP) {
         this._handleCareerMapClick(e);
       } else if (this.state === GameState.CAREER_EVENT) {
@@ -393,7 +401,7 @@ class Game {
         this.startGame();
       } else if (this.state === GameState.SPLITSCREEN_FINISHED) {
         this.state = GameState.MENU;
-        this.menuCursor = 9;
+        this.menuCursor = 10;
         this._isSplitScreen = false;
         this.input.enableSplitScreen(false);
         this.touchManager.setSplitScreenMode(false);
@@ -695,11 +703,12 @@ class Game {
     const itemY3 = itemY2 + itemSpacing;
     const itemY4 = itemY3 + itemSpacing;
     const itemY5 = itemY4 + itemSpacing;
-    const itemY6 = itemY5 + itemSpacing + 8 * uiScale;
-    const itemY7 = itemY6 + itemSpacing;
+    const itemY6 = itemY5 + itemSpacing;
+    const itemY7 = itemY6 + itemSpacing + 8 * uiScale;
     const itemY8 = itemY7 + itemSpacing;
     const itemY9 = itemY8 + itemSpacing;
     const itemY10 = itemY9 + itemSpacing;
+    const itemY11 = itemY10 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -727,20 +736,24 @@ class Game {
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY6 && y < itemY6 + 45) {
         this.menuCursor = 6;
-        this._openSettingsPanel();
+        this._openClubQuest();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY7 && y < itemY7 + 45) {
         this.menuCursor = 7;
-        this._openRaceEditor();
+        this._openSettingsPanel();
         this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY8 && y < itemY8 + 45) {
         this.menuCursor = 8;
-        this.startWantedChase();
+        this._openRaceEditor();
+        this.touchManager.vibrate('menuSelect');
       } else if (y >= itemY9 && y < itemY9 + 45) {
         this.menuCursor = 9;
-        this.startSplitScreen();
+        this.startWantedChase();
       } else if (y >= itemY10 && y < itemY10 + 45) {
         this.menuCursor = 10;
+        this.startSplitScreen();
+      } else if (y >= itemY11 && y < itemY11 + 45) {
+        this.menuCursor = 11;
         this.startGame();
       }
     }
@@ -806,6 +819,9 @@ class Game {
         break;
       case GameState.ACHIEVEMENTS:
         this._updateAchievements();
+        break;
+      case GameState.CLUB_QUEST:
+        this._updateClubQuest(dt);
         break;
       case GameState.CAREER_MAP:
         this._updateCareerMap();
@@ -883,23 +899,28 @@ class Game {
       }
     } else if (this.menuCursor === 6) {
       if (this.input.isMenuConfirm()) {
-        this._openSettingsPanel();
+        this._openClubQuest();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 7) {
       if (this.input.isMenuConfirm()) {
-        this._openRaceEditor();
+        this._openSettingsPanel();
         this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 8) {
       if (this.input.isMenuConfirm()) {
-        this.startWantedChase();
+        this._openRaceEditor();
+        this.touchManager.vibrate('menuSelect');
       }
     } else if (this.menuCursor === 9) {
       if (this.input.isMenuConfirm()) {
-        this.startSplitScreen();
+        this.startWantedChase();
       }
     } else if (this.menuCursor === 10) {
+      if (this.input.isMenuConfirm()) {
+        this.startSplitScreen();
+      }
+    } else if (this.menuCursor === 11) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -925,6 +946,13 @@ class Game {
     this.achievementCursor = 0;
     this.achievementScrollY = 0;
     this.state = GameState.ACHIEVEMENTS;
+  }
+
+  _openClubQuest() {
+    this.clubQuestCursor = 0;
+    this.clubQuestTab = 'daily';
+    this.state = GameState.CLUB_QUEST;
+    this.touchManager.vibrate('menuSelect');
   }
 
   _openCareerMap() {
@@ -1074,6 +1102,165 @@ class Game {
       this.touchManager.vibrate('menuSelect');
     }
     this.input.clearJustPressed();
+  }
+
+  _updateClubQuest(dt) {
+    const dailyQuests = this.clubQuest.getDailyQuests();
+    const streakMilestones = this.clubQuest.getStreakMilestones();
+    const itemCount = this.clubQuestTab === 'daily' ? dailyQuests.length + 1 : streakMilestones.length;
+
+    if (this.input.isMenuUp()) {
+      this.clubQuestCursor = (this.clubQuestCursor - 1 + itemCount) % itemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.clubQuestCursor = (this.clubQuestCursor + 1) % itemCount;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuLeft() || this.input.isMenuRight()) {
+      this.clubQuestTab = this.clubQuestTab === 'daily' ? 'streak' : 'daily';
+      this.clubQuestCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuConfirm()) {
+      if (this.clubQuestTab === 'daily') {
+        if (this.clubQuestCursor < dailyQuests.length) {
+          const quest = dailyQuests[this.clubQuestCursor];
+          if (quest.completed && !quest.claimed) {
+            const reward = this.clubQuest.claimQuestReward(quest.id);
+            if (reward) {
+              this.career.addCoins(reward.coins);
+              this._clubQuestClaimFlash = 0.5;
+              this.touchManager.vibrate('menuSelect');
+            }
+          }
+        } else {
+          const rewards = this.clubQuest.claimAllRewards();
+          if (rewards.coins > 0) {
+            this.career.addCoins(rewards.coins);
+            this._clubQuestClaimFlash = 0.5;
+            this.touchManager.vibrate('menuSelect');
+          }
+        }
+      } else {
+        const milestone = streakMilestones[this.clubQuestCursor];
+        if (milestone && milestone.achieved && !milestone.claimed) {
+          const reward = this.clubQuest.claimStreakReward(milestone.days);
+          if (reward) {
+            this.career.addCoins(reward.coins);
+            this._clubQuestClaimFlash = 0.5;
+            this.touchManager.vibrate('menuSelect');
+          }
+        }
+      }
+    }
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = GameState.MENU;
+      this.menuCursor = 6;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this._clubQuestClaimFlash > 0) {
+      this._clubQuestClaimFlash -= dt;
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _handleClubQuestClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const centerX = this.canvas.width / 2;
+    const canvasW = this.canvas.width;
+    const canvasH = this.canvas.height;
+    const isPortrait = this.renderer.isPortrait();
+    const uiScale = this.renderer._getUIScale();
+
+    const titleY = isPortrait ? 28 * uiScale : 35;
+    const subTitleY = titleY + (isPortrait ? 18 * uiScale : 22);
+    const xpBarY = subTitleY + (isPortrait ? 14 : 16);
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, canvasW * 0.92) : 480;
+    const panelX = centerX - panelW / 2;
+    const panelY = xpBarY + (isPortrait ? 18 * uiScale : 22);
+    const panelH = canvasH - panelY - (isPortrait ? 35 : 45);
+
+    const tabH = 36 * uiScale;
+    const tabY = panelY + 8 * uiScale;
+    const tabW = (panelW - 20 * uiScale) / 2;
+
+    if (y >= tabY && y < tabY + tabH) {
+      if (x >= panelX + 10 * uiScale && x < panelX + 10 * uiScale + tabW) {
+        this.clubQuestTab = 'daily';
+        this.clubQuestCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      } else if (x >= panelX + 10 * uiScale + tabW && x < panelX + panelW - 10 * uiScale) {
+        this.clubQuestTab = 'streak';
+        this.clubQuestCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    const contentY = tabY + tabH + 10 * uiScale;
+    const itemH = 72 * uiScale;
+    const dailyQuests = this.clubQuest.getDailyQuests();
+    const streakMilestones = this.clubQuest.getStreakMilestones();
+
+    if (this.clubQuestTab === 'daily') {
+      for (let i = 0; i < dailyQuests.length; i++) {
+        const itemY = contentY + i * itemH;
+        if (y >= itemY && y < itemY + itemH - 8 * uiScale) {
+          this.clubQuestCursor = i;
+          const quest = dailyQuests[i];
+          if (quest.completed && !quest.claimed) {
+            const reward = this.clubQuest.claimQuestReward(quest.id);
+            if (reward) {
+              this.career.addCoins(reward.coins);
+              this._clubQuestClaimFlash = 0.5;
+            }
+          }
+          this.touchManager.vibrate('menuSelect');
+          return;
+        }
+      }
+      const claimAllY = contentY + dailyQuests.length * itemH;
+      if (y >= claimAllY && y < claimAllY + 44 * uiScale) {
+        this.clubQuestCursor = dailyQuests.length;
+        const rewards = this.clubQuest.claimAllRewards();
+        if (rewards.coins > 0) {
+          this.career.addCoins(rewards.coins);
+          this._clubQuestClaimFlash = 0.5;
+        }
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    } else {
+      for (let i = 0; i < streakMilestones.length; i++) {
+        const itemY = contentY + i * itemH;
+        if (y >= itemY && y < itemY + itemH - 8 * uiScale) {
+          this.clubQuestCursor = i;
+          const milestone = streakMilestones[i];
+          if (milestone.achieved && !milestone.claimed) {
+            const reward = this.clubQuest.claimStreakReward(milestone.days);
+            if (reward) {
+              this.career.addCoins(reward.coins);
+              this._clubQuestClaimFlash = 0.5;
+            }
+          }
+          this.touchManager.vibrate('menuSelect');
+          return;
+        }
+      }
+    }
+
+    this.state = GameState.MENU;
+    this.menuCursor = 6;
+    this.touchManager.vibrate('menuSelect');
   }
 
   _updateCareerMap() {
@@ -1255,7 +1442,7 @@ class Game {
     if (this.input.keys['Escape']) {
       this.input.keys['Escape'] = false;
       this.state = GameState.MENU;
-      this.menuCursor = 9;
+      this.menuCursor = 10;
       this._isSplitScreen = false;
       this.input.enableSplitScreen(false);
       this.touchManager.setSplitScreenMode(false);
@@ -1467,7 +1654,7 @@ class Game {
     if (y >= btnY && y <= btnY + btnH) {
       if (x >= cancelX && x <= cancelX + btnW) {
         this.state = GameState.MENU;
-        this.menuCursor = 9;
+        this.menuCursor = 10;
         this._isSplitScreen = false;
         this.input.enableSplitScreen(false);
         this.touchManager.setSplitScreenMode(false);
@@ -2671,7 +2858,7 @@ class Game {
   _updateWantedResult() {
     if (this.input.isMenuConfirm()) {
       this.state = GameState.MENU;
-      this.menuCursor = 8;
+      this.menuCursor = 9;
       this.input.clearJustPressed();
     }
   }
@@ -2687,7 +2874,7 @@ class Game {
         }
       } else {
         this.state = GameState.MENU;
-        this.menuCursor = 7;
+        this.menuCursor = 8;
       }
       this.input.clearJustPressed();
     }
@@ -2719,7 +2906,7 @@ class Game {
         break;
       case 2:
         this.state = GameState.MENU;
-        this.menuCursor = 9;
+        this.menuCursor = 10;
         this._isSplitScreen = false;
         this.input.enableSplitScreen(false);
         this.touchManager.setSplitScreenMode(false);
@@ -2852,7 +3039,7 @@ class Game {
     }
 
     this.state = GameState.MENU;
-    this.menuCursor = 7;
+    this.menuCursor = 8;
     this._prevStateBeforePause = null;
     this.input.reset();
     this.touchManager.reset();
@@ -2908,6 +3095,11 @@ class Game {
 
     if (this.state === GameState.ACHIEVEMENTS) {
       this.renderer.drawAchievements(this);
+      return;
+    }
+
+    if (this.state === GameState.CLUB_QUEST) {
+      this.renderer.drawClubQuest(this);
       return;
     }
 
@@ -3217,6 +3409,16 @@ class Game {
       finished: finished,
       weatherScoreMultiplier: weatherScoreMult,
       weatherDifficultyBonus: weatherScoreMult > 1.2 ? 1 : 0
+    });
+
+    this.clubQuest.processRaceResults({
+      playerRank: rank,
+      playerCollisions: totalPlayerCollisions,
+      raceDriftDistance: driftDistance,
+      bestLapTime: bestLapTime !== Infinity ? bestLapTime / weatherLapMult : bestLapTime,
+      obstaclesDestroyed: obstaclesDestroyed,
+      nitroTotalTime: nitroTotalTime,
+      finished: finished
     });
   }
 

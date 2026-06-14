@@ -2554,9 +2554,9 @@ class Renderer {
     ctx.textAlign = 'center';
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 480 * uiScale : 480;
+    const panelH = isPortrait ? 570 * uiScale : 570;
     const panelX = centerX - panelW / 2;
-    const panelY = isPortrait ? titleY + 60 * uiScale : centerY - 100;
+    const panelY = isPortrait ? titleY + 50 * uiScale : centerY - 140;
 
     ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
     ctx.beginPath();
@@ -2579,10 +2579,12 @@ class Renderer {
     const btnOffset3 = btnOffset2 + itemSpacing;
     const btnOffset4 = btnOffset3 + itemSpacing;
     const btnOffset5 = btnOffset4 + itemSpacing;
-    const btnOffset6 = btnOffset5 + itemSpacing + 6 * uiScale;
-    const btnOffset7 = btnOffset6 + itemSpacing;
+    const btnOffset6 = btnOffset5 + itemSpacing;
+    const btnOffset7 = btnOffset6 + itemSpacing + 6 * uiScale;
     const btnOffset8 = btnOffset7 + itemSpacing;
     const btnOffset9 = btnOffset8 + itemSpacing;
+    const btnOffset10 = btnOffset9 + itemSpacing;
+    const btnOffset11 = btnOffset10 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -2629,32 +2631,46 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset6, panelW,
-      '操控设置',
-      game.menuCursor === 6, uiScale
+      '🏅 俱乐部任务',
+      game.menuCursor === 6, uiScale,
+      '#ff00ff'
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset7, panelW,
-      '🏁 赛事编辑器',
-      game.menuCursor === 7, uiScale,
-      '#ff6600'
+      '操控设置',
+      game.menuCursor === 7, uiScale
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset8, panelW,
-      '🚓 悬赏追逐',
+      '🏁 赛事编辑器',
       game.menuCursor === 8, uiScale,
-      '#ff0044'
+      '#ff6600'
     );
 
     this._drawMenuButton(
       panelX, panelY + btnOffset9, panelW,
-      '👥 双人对战',
+      '🚓 悬赏追逐',
       game.menuCursor === 9, uiScale,
+      '#ff0044'
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + btnOffset10, panelW,
+      '👥 双人对战',
+      game.menuCursor === 10, uiScale,
       '#ff00ff'
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset9 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawMenuButton(
+      panelX, panelY + btnOffset11, panelW,
+      '🏁 开始游戏',
+      game.menuCursor === 11, uiScale,
+      '#00ff66'
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset11 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -4920,6 +4936,431 @@ class Renderer {
 
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  drawClubQuest(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const clubQuest = game.clubQuest;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const bgGrad = ctx.createRadialGradient(
+      this.width * 0.5, this.height * 0.3, 0,
+      this.width * 0.5, this.height * 0.3, this.width * 0.6
+    );
+    bgGrad.addColorStop(0, 'rgba(255, 0, 255, 0.05)');
+    bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const titleY = isPortrait ? 28 * uiScale : 35;
+    const titleSize = isPortrait ? 22 * uiScale : 28;
+
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🏅 俱乐部任务', centerX, titleY);
+    ctx.shadowBlur = 0;
+
+    const streakDays = clubQuest.getStreakDays();
+    const clubLevel = clubQuest.getClubLevel();
+    const subTitleY = titleY + (isPortrait ? 18 * uiScale : 22);
+    ctx.fillStyle = '#888';
+    ctx.font = `${(isPortrait ? 10 : 12) * uiScale}px monospace`;
+    ctx.fillText(`🔥 连胜 ${streakDays} 天  |  ⭐ 俱乐部 Lv.${clubLevel}`, centerX, subTitleY);
+
+    const xpProgress = clubQuest.getLevelProgress();
+    const xpForNext = clubQuest.getXpForNextLevel();
+    const totalXp = clubQuest.getTotalXp();
+    const xpBarY = subTitleY + (isPortrait ? 14 : 16);
+    const xpBarW = isPortrait ? 200 * uiScale : 240;
+    const xpBarH = isPortrait ? 6 * uiScale : 7;
+    const xpBarX = centerX - xpBarW / 2;
+
+    ctx.fillStyle = 'rgba(50, 50, 80, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(xpBarX, xpBarY, xpBarW, xpBarH, xpBarH / 2);
+    ctx.fill();
+
+    const xpGrad = ctx.createLinearGradient(xpBarX, 0, xpBarX + xpBarW, 0);
+    xpGrad.addColorStop(0, '#ffd700');
+    xpGrad.addColorStop(1, '#ff8800');
+    ctx.fillStyle = xpGrad;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#ffd700';
+    ctx.beginPath();
+    ctx.roundRect(xpBarX, xpBarY, xpBarW * xpProgress, xpBarH, xpBarH / 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, this.width * 0.92) : 480;
+    const panelX = centerX - panelW / 2;
+    const panelY = xpBarY + (isPortrait ? 18 * uiScale : 22);
+    const panelH = this.height - panelY - (isPortrait ? 35 : 45);
+
+    ctx.fillStyle = 'rgba(15, 15, 30, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12 * uiScale);
+    ctx.stroke();
+
+    const tabH = 36 * uiScale;
+    const tabY = panelY + 8 * uiScale;
+    const tabW = (panelW - 20 * uiScale) / 2;
+
+    const dailySelected = game.clubQuestTab === 'daily';
+    const streakSelected = game.clubQuestTab === 'streak';
+
+    ctx.fillStyle = dailySelected ? 'rgba(255, 0, 255, 0.2)' : 'rgba(40, 40, 60, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + 10 * uiScale, tabY, tabW, tabH, 8 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = dailySelected ? '#ff00ff' : 'rgba(100, 100, 130, 0.3)';
+    ctx.lineWidth = dailySelected ? 2 * uiScale : 1;
+    if (dailySelected) {
+      ctx.shadowBlur = 8 * uiScale;
+      ctx.shadowColor = '#ff00ff';
+    }
+    ctx.beginPath();
+    ctx.roundRect(panelX + 10 * uiScale, tabY, tabW, tabH, 8 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = dailySelected ? '#ff00ff' : '#888';
+    ctx.shadowBlur = dailySelected ? 6 : 0;
+    ctx.shadowColor = '#ff00ff';
+    ctx.font = `bold ${(isPortrait ? 11 : 13) * uiScale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('📅 每日挑战', panelX + 10 * uiScale + tabW / 2, tabY + tabH * 0.62);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = streakSelected ? 'rgba(255, 215, 0, 0.2)' : 'rgba(40, 40, 60, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + 10 * uiScale + tabW, tabY, tabW, tabH, 8 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = streakSelected ? '#ffd700' : 'rgba(100, 100, 130, 0.3)';
+    ctx.lineWidth = streakSelected ? 2 * uiScale : 1;
+    if (streakSelected) {
+      ctx.shadowBlur = 8 * uiScale;
+      ctx.shadowColor = '#ffd700';
+    }
+    ctx.beginPath();
+    ctx.roundRect(panelX + 10 * uiScale + tabW, tabY, tabW, tabH, 8 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = streakSelected ? '#ffd700' : '#888';
+    ctx.shadowBlur = streakSelected ? 6 : 0;
+    ctx.shadowColor = '#ffd700';
+    ctx.font = `bold ${(isPortrait ? 11 : 13) * uiScale}px monospace`;
+    ctx.fillText('🔥 连胜奖励', panelX + 10 * uiScale + tabW + tabW / 2, tabY + tabH * 0.62);
+    ctx.shadowBlur = 0;
+
+    const contentY = tabY + tabH + 10 * uiScale;
+    const contentH = panelH - (tabY - panelY) - tabH - 20 * uiScale;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(panelX + 4, contentY - 2, panelW - 8, contentH + 4);
+    ctx.clip();
+
+    if (game.clubQuestTab === 'daily') {
+      this._drawDailyQuests(game, panelX, contentY, panelW, contentH, uiScale, isPortrait);
+    } else {
+      this._drawStreakRewards(game, panelX, contentY, panelW, contentH, uiScale, isPortrait);
+    }
+
+    ctx.restore();
+
+    const timeText = clubQuest.formatTimeUntilReset();
+    ctx.fillStyle = '#666';
+    ctx.font = `${(isPortrait ? 9 : 10) * uiScale}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`⏰ 刷新倒计时: ${timeText}`, centerX, panelY + panelH - (isPortrait ? 12 : 15));
+
+    const hintSize = isPortrait ? 9 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.fillText('↑↓ 选择  ←→ 切换  空格领取  |  ESC 返回', centerX, this.height - (isPortrait ? 16 : 22));
+
+    ctx.restore();
+  }
+
+  _drawDailyQuests(game, panelX, contentY, panelW, contentH, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const clubQuest = game.clubQuest;
+    const dailyQuests = clubQuest.getDailyQuests();
+    const itemH = 72 * uiScale;
+
+    dailyQuests.forEach((quest, idx) => {
+      const isSelected = game.clubQuestCursor === idx;
+      const itemY = contentY + idx * itemH;
+
+      if (itemY + itemH < contentY || itemY > contentY + contentH) return;
+
+      const itemX = panelX + 10 * uiScale;
+      const itemW = panelW - 20 * uiScale;
+
+      if (isSelected) {
+        ctx.fillStyle = quest.completed ? 'rgba(0, 255, 102, 0.06)' : 'rgba(255, 0, 255, 0.06)';
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, itemH - 8 * uiScale, 8 * uiScale);
+        ctx.fill();
+
+        const borderColor = quest.claimed ? '#00ff66' : (quest.completed ? '#ffd700' : quest.rarityInfo.color);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2 * uiScale;
+        ctx.shadowBlur = 10 * uiScale;
+        ctx.shadowColor = borderColor;
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, itemH - 8 * uiScale, 8 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const iconSize = isPortrait ? 20 * uiScale : 24;
+      ctx.font = `${iconSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(quest.icon, itemX + 12 * uiScale, itemY + 22 * uiScale);
+
+      const nameSize = isPortrait ? 11 * uiScale : 13;
+      ctx.fillStyle = quest.claimed ? '#00ff66' : quest.rarityInfo.color;
+      ctx.shadowBlur = isSelected ? 8 : 4;
+      ctx.shadowColor = quest.rarityInfo.color;
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.fillText(quest.name, itemX + 38 * uiScale, itemY + 20 * uiScale);
+      ctx.shadowBlur = 0;
+
+      const raritySize = isPortrait ? 8 * uiScale : 9;
+      ctx.fillStyle = quest.rarityInfo.color;
+      ctx.font = `${raritySize}px monospace`;
+      ctx.fillText(`[${quest.rarityInfo.name}]`, itemX + 38 * uiScale, itemY + 34 * uiScale);
+
+      const descSize = isPortrait ? 9 * uiScale : 10;
+      ctx.fillStyle = '#aaa';
+      ctx.font = `${descSize}px monospace`;
+      ctx.fillText(quest.description, itemX + 12 * uiScale, itemY + 48 * uiScale);
+
+      const progressBarY = itemY + 54 * uiScale;
+      const progressBarW = itemW - 100 * uiScale;
+      const progressBarH = isPortrait ? 5 * uiScale : 6;
+      const progressBarX = itemX + 12 * uiScale;
+
+      ctx.fillStyle = 'rgba(50, 50, 80, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(progressBarX, progressBarY, progressBarW, progressBarH, progressBarH / 2);
+      ctx.fill();
+
+      let progressPct = 0;
+      if (quest.isLowerBetter) {
+        progressPct = quest.progress > 0 ? Math.min(100, (quest.target / quest.progress) * 100) : 0;
+      } else {
+        progressPct = Math.min(100, (quest.progress / quest.target) * 100);
+      }
+      const progressRatio = Math.min(1, progressPct / 100);
+
+      const progressColor = quest.completed ? '#00ff66' : quest.rarityInfo.color;
+      ctx.fillStyle = progressColor;
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = progressColor;
+      ctx.beginPath();
+      ctx.roundRect(progressBarX, progressBarY, progressBarW * progressRatio, progressBarH, progressBarH / 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      const progressTextSize = isPortrait ? 8 * uiScale : 9;
+      ctx.fillStyle = '#888';
+      ctx.font = `${progressTextSize}px monospace`;
+      ctx.textAlign = 'right';
+      const progressDisplay = quest.isLowerBetter
+        ? (quest.progress > 0 ? `${quest.progress.toFixed(1)}${quest.unit} / ${quest.target}${quest.unit}` : `0${quest.unit} / ${quest.target}${quest.unit}`)
+        : `${Math.floor(quest.progress)}${quest.unit} / ${quest.target}${quest.unit}`;
+      ctx.fillText(progressDisplay, itemX + itemW - 12 * uiScale, itemY + 48 * uiScale);
+
+      const rewardX = itemX + itemW - 12 * uiScale;
+      const rewardY = itemY + 22 * uiScale;
+      ctx.fillStyle = '#ffd700';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#ffd700';
+      ctx.font = `bold ${descSize}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`💰 ${quest.reward.coins}`, rewardX, rewardY);
+      ctx.shadowBlur = 0;
+
+      if (quest.claimed) {
+        ctx.fillStyle = '#00ff66';
+        ctx.font = `bold ${descSize}px monospace`;
+        ctx.fillText('✓ 已领取', rewardX, itemY + 36 * uiScale);
+      } else if (quest.completed) {
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+        ctx.shadowBlur = 6 * pulse;
+        ctx.shadowColor = '#ffd700';
+        ctx.font = `bold ${descSize}px monospace`;
+        ctx.fillText('🎁 可领取', rewardX, itemY + 36 * uiScale);
+        ctx.shadowBlur = 0;
+      }
+    });
+
+    const claimAllIdx = dailyQuests.length;
+    const isClaimAllSelected = game.clubQuestCursor === claimAllIdx;
+    const claimAllY = contentY + dailyQuests.length * itemH;
+    const claimAllH = 44 * uiScale;
+    const unclaimedCount = clubQuest.getUnclaimedCount();
+
+    if (claimAllY + claimAllH < contentY + contentH) {
+      const claimAllX = panelX + 10 * uiScale;
+      const claimAllW = panelW - 20 * uiScale;
+
+      if (isClaimAllSelected) {
+        ctx.fillStyle = unclaimedCount > 0 ? 'rgba(255, 215, 0, 0.1)' : 'rgba(50, 50, 70, 0.3)';
+        ctx.beginPath();
+        ctx.roundRect(claimAllX, claimAllY, claimAllW, claimAllH - 8 * uiScale, 8 * uiScale);
+        ctx.fill();
+
+        ctx.strokeStyle = unclaimedCount > 0 ? '#ffd700' : '#444';
+        ctx.lineWidth = 2 * uiScale;
+        if (unclaimedCount > 0) {
+          ctx.shadowBlur = 10 * uiScale;
+          ctx.shadowColor = '#ffd700';
+        }
+        ctx.beginPath();
+        ctx.roundRect(claimAllX, claimAllY, claimAllW, claimAllH - 8 * uiScale, 8 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const btnText = unclaimedCount > 0 ? `🎁 一键领取 (${unclaimedCount})` : '✅ 全部已领取';
+      const textColor = unclaimedCount > 0 ? '#ffd700' : '#555';
+      ctx.fillStyle = textColor;
+      if (unclaimedCount > 0) {
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#ffd700';
+      }
+      ctx.font = `bold ${(isPortrait ? 12 : 14) * uiScale}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(btnText, panelX + panelW / 2, claimAllY + (claimAllH - 8 * uiScale) * 0.62);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  _drawStreakRewards(game, panelX, contentY, panelW, contentH, uiScale, isPortrait) {
+    const ctx = this.ctx;
+    const clubQuest = game.clubQuest;
+    const streakMilestones = clubQuest.getStreakMilestones();
+    const streakDays = clubQuest.getStreakDays();
+    const itemH = 72 * uiScale;
+
+    streakMilestones.forEach((milestone, idx) => {
+      const isSelected = game.clubQuestCursor === idx;
+      const itemY = contentY + idx * itemH;
+
+      if (itemY + itemH < contentY || itemY > contentY + contentH) return;
+
+      const itemX = panelX + 10 * uiScale;
+      const itemW = panelW - 20 * uiScale;
+
+      if (isSelected) {
+        ctx.fillStyle = milestone.achieved ? 'rgba(255, 215, 0, 0.08)' : 'rgba(50, 50, 70, 0.2)';
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, itemH - 8 * uiScale, 8 * uiScale);
+        ctx.fill();
+
+        const borderColor = milestone.claimed ? '#00ff66' : (milestone.achieved ? '#ffd700' : '#444');
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2 * uiScale;
+        if (milestone.achieved) {
+          ctx.shadowBlur = 10 * uiScale;
+          ctx.shadowColor = borderColor;
+        }
+        ctx.beginPath();
+        ctx.roundRect(itemX, itemY, itemW, itemH - 8 * uiScale, 8 * uiScale);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      const iconSize = isPortrait ? 22 * uiScale : 26;
+      ctx.font = `${iconSize}px monospace`;
+      ctx.textAlign = 'left';
+      const iconAlpha = milestone.achieved ? 1 : 0.4;
+      ctx.globalAlpha = iconAlpha;
+      ctx.fillText(milestone.icon, itemX + 14 * uiScale, itemY + 26 * uiScale);
+      ctx.globalAlpha = 1;
+
+      const nameSize = isPortrait ? 12 * uiScale : 14;
+      const nameColor = milestone.achieved ? '#ffd700' : '#666';
+      ctx.fillStyle = nameColor;
+      ctx.shadowBlur = milestone.achieved && isSelected ? 8 : 0;
+      ctx.shadowColor = '#ffd700';
+      ctx.font = `bold ${nameSize}px monospace`;
+      ctx.fillText(milestone.name, itemX + 48 * uiScale, itemY + 22 * uiScale);
+      ctx.shadowBlur = 0;
+
+      const daysSize = isPortrait ? 9 * uiScale : 10;
+      ctx.fillStyle = milestone.achieved ? '#ffd700' : '#555';
+      ctx.font = `${daysSize}px monospace`;
+      ctx.fillText(`连续 ${milestone.days} 天`, itemX + 48 * uiScale, itemY + 38 * uiScale);
+
+      const rewardY = itemY + 52 * uiScale;
+      const rewardSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = milestone.achieved ? '#ffd700' : '#555';
+      ctx.font = `bold ${rewardSize}px monospace`;
+      ctx.fillText(`💰 ${milestone.reward.coins}  ⭐ ${milestone.reward.xp} XP`, itemX + 48 * uiScale, rewardY);
+
+      const progressPct = Math.min(100, (streakDays / milestone.days) * 100);
+      const progressBarY = itemY + 58 * uiScale;
+      const progressBarW = itemW - 60 * uiScale;
+      const progressBarH = isPortrait ? 4 * uiScale : 5;
+      const progressBarX = itemX + 48 * uiScale;
+
+      ctx.fillStyle = 'rgba(50, 50, 80, 0.3)';
+      ctx.beginPath();
+      ctx.roundRect(progressBarX, progressBarY, progressBarW, progressBarH, progressBarH / 2);
+      ctx.fill();
+
+      const progressColor = milestone.achieved ? '#ffd700' : '#666';
+      ctx.fillStyle = progressColor;
+      const progressRatio = Math.min(1, progressPct / 100);
+      ctx.beginPath();
+      ctx.roundRect(progressBarX, progressBarY, progressBarW * progressRatio, progressBarH, progressBarH / 2);
+      ctx.fill();
+
+      const statusX = itemX + itemW - 12 * uiScale;
+      ctx.textAlign = 'right';
+      const statusSize = isPortrait ? 9 * uiScale : 10;
+      ctx.font = `bold ${statusSize}px monospace`;
+
+      if (milestone.claimed) {
+        ctx.fillStyle = '#00ff66';
+        ctx.fillText('✓ 已领取', statusX, itemY + 24 * uiScale);
+      } else if (milestone.achieved) {
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+        ctx.shadowBlur = 6 * pulse;
+        ctx.shadowColor = '#ffd700';
+        ctx.fillText('🎁 可领取', statusX, itemY + 24 * uiScale);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = '#555';
+        ctx.fillText(`${streakDays}/${milestone.days}天`, statusX, itemY + 24 * uiScale);
+      }
+    });
   }
 
   drawCareerMap(game) {
