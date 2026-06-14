@@ -2908,6 +2908,7 @@ class Renderer {
     const btnOffset9 = btnOffset8 + itemSpacing;
     const btnOffset10 = btnOffset9 + itemSpacing;
     const btnOffset11 = btnOffset10 + itemSpacing;
+    const btnOffset12 = btnOffset11 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -2988,12 +2989,19 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset11, panelW,
-      '🏁 开始游戏',
+      '🤝 赞助合约',
       game.menuCursor === 11, uiScale,
+      '#ffd700'
+    );
+
+    this._drawMenuButton(
+      panelX, panelY + btnOffset12, panelW,
+      '🏁 开始游戏',
+      game.menuCursor === 12, uiScale,
       '#00ff66'
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset11 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset12 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -4428,9 +4436,25 @@ class Renderer {
       ctx.fillText(currentItem.description || '', nameX, nameY + 16 * uiScale);
 
       if (currentItem.cost > 0 && !isUnlocked) {
+        const effectiveCost = garage.getEffectiveCost(currentItem.cost);
+        const hasDiscount = effectiveCost < currentItem.cost;
         ctx.fillStyle = canBuy ? '#ffff00' : '#ff4444';
         ctx.font = `bold ${descSize}px monospace`;
-        ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 30 * uiScale);
+        if (hasDiscount) {
+          ctx.fillStyle = '#666';
+          ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 30 * uiScale);
+          const slashW = ctx.measureText(`💰 ${currentItem.cost}`).width;
+          ctx.strokeStyle = '#666';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(nameX, nameY + 26 * uiScale);
+          ctx.lineTo(nameX + slashW, nameY + 26 * uiScale);
+          ctx.stroke();
+          ctx.fillStyle = canBuy ? '#00ff66' : '#ff4444';
+          ctx.fillText(` → ${effectiveCost}`, nameX + slashW, nameY + 30 * uiScale);
+        } else {
+          ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 30 * uiScale);
+        }
       }
 
       const statsY = y + h * 0.32;
@@ -4487,9 +4511,25 @@ class Renderer {
       ctx.fillText(currentItem.description || '', nameX, nameY + 22);
 
       if (currentItem.cost > 0 && !isUnlocked) {
+        const effectiveCost = garage.getEffectiveCost(currentItem.cost);
+        const hasDiscount = effectiveCost < currentItem.cost;
         ctx.fillStyle = canBuy ? '#ffff00' : '#ff4444';
         ctx.font = `bold ${descSize}px monospace`;
-        ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 42);
+        if (hasDiscount) {
+          ctx.fillStyle = '#666';
+          ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 42);
+          const slashW = ctx.measureText(`💰 ${currentItem.cost}`).width;
+          ctx.strokeStyle = '#666';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(nameX, nameY + 38);
+          ctx.lineTo(nameX + slashW, nameY + 38);
+          ctx.stroke();
+          ctx.fillStyle = canBuy ? '#00ff66' : '#ff4444';
+          ctx.fillText(` → ${effectiveCost}`, nameX + slashW, nameY + 42);
+        } else {
+          ctx.fillText(`💰 ${currentItem.cost}`, nameX, nameY + 42);
+        }
       }
 
       if (isSelected && isUnlocked) {
@@ -5260,14 +5300,31 @@ class Renderer {
         ctx.textAlign = 'center';
         ctx.fillText('装备中', badgeX + badgeW / 2, badgeY + badgeH * 0.65);
       } else if (!isUnlocked) {
-        const costX = x + w - 70 * uiScale;
-        const costY = iy + itemH * 0.6;
+        const effectiveCost = garage.getEffectiveCost(item.cost);
+        const hasDiscount = effectiveCost < item.cost;
 
-        const canAfford = game.career.coins >= item.cost;
-        ctx.fillStyle = canAfford ? '#ffff00' : '#ff4444';
-        ctx.font = `bold ${subSize}px monospace`;
-        ctx.textAlign = 'right';
-        ctx.fillText(`💰 ${item.cost}`, x + w - 15 * uiScale, iy + itemH * 0.58);
+        const canAfford = game.career.coins >= effectiveCost;
+
+        if (hasDiscount) {
+          ctx.fillStyle = '#666';
+          ctx.font = `bold ${subSize}px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText(`💰 ${item.cost}`, x + w - 15 * uiScale, iy + itemH * 0.42);
+          const slashW = ctx.measureText(`💰 ${item.cost}`).width;
+          ctx.strokeStyle = '#666';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + w - 15 * uiScale - slashW, iy + itemH * 0.38);
+          ctx.lineTo(x + w - 15 * uiScale, iy + itemH * 0.38);
+          ctx.stroke();
+          ctx.fillStyle = canAfford ? '#00ff66' : '#ff4444';
+          ctx.fillText(`→ ${effectiveCost}`, x + w - 15 * uiScale, iy + itemH * 0.68);
+        } else {
+          ctx.fillStyle = canAfford ? '#ffff00' : '#ff4444';
+          ctx.font = `bold ${subSize}px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText(`💰 ${item.cost}`, x + w - 15 * uiScale, iy + itemH * 0.58);
+        }
       }
 
       if (!isUnlocked && category === 'engine') {
@@ -6083,12 +6140,17 @@ class Renderer {
       '🔧 升级', '#ffff00', '#aa8800'
     );
 
+    this._drawCareerTopButton(
+      this.width - (isPortrait ? 15 * uiScale : 20) - btnW * 1.1, topBarY + btnH + 6, btnW * 1.1, btnH,
+      '🤝 赞助', '#ffd700', '#aa8800'
+    );
+
     ctx.fillStyle = '#ffd700';
     ctx.shadowBlur = 8;
     ctx.shadowColor = '#ffd700';
     ctx.font = `bold ${subtitleSize + 1}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(`💰 ${career.coins}`, this.width - (isPortrait ? 15 * uiScale : 20), topBarY + btnH + 22 * uiScale);
+    ctx.fillText(`💰 ${career.coins}`, this.width - (isPortrait ? 15 * uiScale : 20), topBarY + btnH * 2 + 38 * uiScale);
     ctx.shadowBlur = 0;
 
     const navY = isPortrait ? 90 * uiScale : 90;
@@ -6810,7 +6872,22 @@ class Renderer {
         ctx.font = `bold ${descSize + 1}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`💰 ${cost}`, costBtnX + costBtnW / 2, costBtnY + costBtnH / 2 + 1);
+        const effectiveCost = career.getDiscountedPrice(cost);
+        if (effectiveCost < cost) {
+          ctx.fillStyle = '#666';
+          ctx.fillText(`💰 ${cost}`, costBtnX + costBtnW / 2, costBtnY + costBtnH * 0.35);
+          const slashW = ctx.measureText(`💰 ${cost}`).width;
+          ctx.strokeStyle = '#666';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(costBtnX + costBtnW / 2 - slashW / 2, costBtnY + costBtnH * 0.28);
+          ctx.lineTo(costBtnX + costBtnW / 2 + slashW / 2, costBtnY + costBtnH * 0.28);
+          ctx.stroke();
+          ctx.fillStyle = canBuy ? '#00ff66' : '#555';
+          ctx.fillText(`→ ${effectiveCost}`, costBtnX + costBtnW / 2, costBtnY + costBtnH * 0.7);
+        } else {
+          ctx.fillText(`💰 ${cost}`, costBtnX + costBtnW / 2, costBtnY + costBtnH / 2 + 1);
+        }
         ctx.textBaseline = 'alphabetic';
       }
       ctx.textAlign = 'left';
@@ -7174,6 +7251,43 @@ class Renderer {
     ctx.fillText(`当前总金币: ${career.coins}`, panelX + panelW - 38 * uiScale, rewardStartY + rewardH * 0.82);
     ctx.textAlign = 'left';
 
+    if (result.sponsorBonusCoins && result.sponsorBonusCoins > 0) {
+      const sponsorH = isPortrait ? 58 * uiScale : 64;
+      const sponsorY = rewardStartY + rewardH + 8 * uiScale;
+
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.08)';
+      ctx.beginPath();
+      ctx.roundRect(panelX + 20, sponsorY, panelW - 40, sponsorH, 10 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd70050';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(panelX + 20, sponsorY, panelW - 40, sponsorH, 10 * uiScale);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffd700';
+      ctx.font = `bold ${rewardLabelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText('🤝 赞助奖金', panelX + 38 * uiScale, sponsorY + sponsorH * 0.38);
+
+      ctx.fillStyle = '#ffd700';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffd700';
+      ctx.font = `bold ${isPortrait ? 18 * uiScale : 22}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`+${result.sponsorBonusCoins}`, panelX + panelW - 38 * uiScale, sponsorY + sponsorH * 0.42);
+      ctx.shadowBlur = 0;
+
+      if (result.sponsorDetails && result.sponsorDetails.length > 0) {
+        const detailSize = isPortrait ? 9 * uiScale : 10;
+        ctx.fillStyle = '#aa8800';
+        ctx.font = `${detailSize}px monospace`;
+        ctx.textAlign = 'left';
+        const detailNames = result.sponsorDetails.map(d => `${d.icon} ${d.sponsorName}`).join('  ');
+        ctx.fillText(detailNames, panelX + 38 * uiScale, sponsorY + sponsorH * 0.78);
+      }
+    }
+
     const btnH = isPortrait ? 48 * uiScale : 52;
     const btnY = panelY + panelH - btnH - 18 * uiScale;
     const btnW = isPortrait ? 260 * uiScale : 300;
@@ -7189,6 +7303,361 @@ class Renderer {
     ctx.fillText('回车 / 点击 继续  |  ESC 返回地图', centerX, panelY + panelH - 4 * uiScale);
 
     ctx.restore();
+  }
+
+  drawSponsor(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+    const career = game.career;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.97)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const panelW = isPortrait ? Math.min(350 * uiScale, this.width * 0.92) : 460;
+    const panelH = this.height - 40;
+    const panelX = centerX - panelW / 2;
+    const panelY = 20;
+
+    ctx.fillStyle = 'rgba(14, 14, 34, 0.96)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 18 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffd700';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 18 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const headerH = isPortrait ? 55 * uiScale : 60;
+    const headerGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + headerH);
+    headerGrad.addColorStop(0, '#ffd70020');
+    headerGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = headerGrad;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, headerH, { tl: 18 * uiScale, tr: 18 * uiScale, br: 0, bl: 0 });
+    ctx.fill();
+
+    const titleSize = isPortrait ? 18 * uiScale : 22;
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ffd700';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🤝 赞助合约', centerX, panelY + 32 * uiScale);
+    ctx.shadowBlur = 0;
+
+    const discount = career.getTotalShopDiscount();
+    if (discount > 0) {
+      const badgeSize = isPortrait ? 10 * uiScale : 11;
+      const totalCoinBonus = career.activeSponsors.reduce((sum, id) => {
+        const s = career.getSponsorById(id);
+        return sum + (s ? s.coinBonus : 0);
+      }, 0);
+      ctx.fillStyle = '#00ff66';
+      ctx.font = `bold ${badgeSize}px monospace`;
+      ctx.fillText(`商店折扣 -${(discount * 100).toFixed(0)}%  |  奖金加成 +${(totalCoinBonus * 100).toFixed(0)}%`, centerX, panelY + 50 * uiScale);
+    }
+
+    const tabY = panelY + headerH + 8 * uiScale;
+    const tabH = isPortrait ? 36 * uiScale : 40;
+    const tabW = panelW / 2;
+
+    const activeTab = game.sponsorTab === 'active';
+    ctx.fillStyle = activeTab ? 'rgba(0, 245, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + 4, tabY, tabW - 4, tabH, { tl: 10, tr: 0, br: 0, bl: 10 });
+    ctx.fill();
+    if (activeTab) {
+      ctx.strokeStyle = '#00f5ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(panelX + 4, tabY, tabW - 4, tabH, { tl: 10, tr: 0, br: 0, bl: 10 });
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = !activeTab ? 'rgba(0, 245, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + tabW, tabY, tabW - 4, tabH, { tl: 0, tr: 10, br: 10, bl: 0 });
+    ctx.fill();
+    if (!activeTab) {
+      ctx.strokeStyle = '#00f5ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(panelX + tabW, tabY, tabW - 4, tabH, { tl: 0, tr: 10, br: 10, bl: 0 });
+      ctx.stroke();
+    }
+
+    const tabLabelSize = isPortrait ? 12 * uiScale : 14;
+    ctx.fillStyle = activeTab ? '#00f5ff' : '#888';
+    ctx.font = `bold ${tabLabelSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`已签约 (${career.activeSponsors.length})`, panelX + tabW / 2, tabY + tabH * 0.62);
+
+    const availableCount = SponsorContracts.filter(s => career.isSponsorAvailable(s.id)).length;
+    ctx.fillStyle = !activeTab ? '#00f5ff' : '#888';
+    ctx.fillText(`可签约 (${availableCount})`, panelX + tabW + tabW / 2, tabY + tabH * 0.62);
+
+    if (game._sponsorDetailId) {
+      this._drawSponsorDetail(game, ctx, panelX, tabY + tabH + 10 * uiScale, panelW, panelH - (tabY + tabH + 10 * uiScale - panelY), uiScale, isPortrait);
+      ctx.restore();
+      return;
+    }
+
+    const listY = tabY + tabH + 10 * uiScale;
+    const listH = panelH - (listY - panelY) - 50 * uiScale;
+    const itemH = isPortrait ? 72 * uiScale : 80;
+    const itemGap = isPortrait ? 8 * uiScale : 10;
+
+    const currentList = game.sponsorTab === 'active' ? career.activeSponsors : SponsorContracts.filter(s => career.isSponsorAvailable(s.id)).map(s => s.id);
+
+    if (currentList.length === 0) {
+      const emptySize = isPortrait ? 13 * uiScale : 15;
+      ctx.fillStyle = '#555';
+      ctx.font = `${emptySize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(game.sponsorTab === 'active' ? '暂无签约赞助商' : '暂无可用赞助商', centerX, listY + listH / 2);
+      ctx.fillStyle = '#444';
+      ctx.font = `${emptySize - 2}px monospace`;
+      ctx.fillText(game.sponsorTab === 'active' ? '在"可签约"页签中签约赞助商' : '完成更多阶段解锁新赞助', centerX, listY + listH / 2 + 24 * uiScale);
+    } else {
+      const maxVisible = Math.floor(listH / (itemH + itemGap));
+      const scrollOffset = Math.max(0, game.sponsorCursor - maxVisible + 1);
+
+      for (let vi = 0; vi < maxVisible; vi++) {
+        const i = vi + scrollOffset;
+        if (i >= currentList.length) break;
+
+        const sponsorId = currentList[i];
+        const sponsor = career.getSponsorById(sponsorId);
+        if (!sponsor) continue;
+
+        const iy = listY + vi * (itemH + itemGap);
+        const isSelected = game.sponsorCursor === i;
+
+        ctx.fillStyle = isSelected ? `${sponsor.color}18` : 'rgba(255,255,255,0.03)';
+        ctx.beginPath();
+        ctx.roundRect(panelX + 12, iy, panelW - 24, itemH, 12 * uiScale);
+        ctx.fill();
+
+        if (isSelected) {
+          ctx.strokeStyle = sponsor.color;
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = sponsor.color;
+          ctx.beginPath();
+          ctx.roundRect(panelX + 12, iy, panelW - 24, itemH, 12 * uiScale);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        const iconSize = isPortrait ? 28 * uiScale : 32;
+        ctx.font = `${iconSize}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText(sponsor.icon, panelX + 24, iy + itemH * 0.45);
+
+        const nameSize = isPortrait ? 14 * uiScale : 16;
+        ctx.fillStyle = sponsor.color;
+        ctx.font = `bold ${nameSize}px monospace`;
+        ctx.fillText(sponsor.name, panelX + 24 + iconSize + 8, iy + itemH * 0.35);
+
+        const descSize = isPortrait ? 10 * uiScale : 11;
+        ctx.fillStyle = '#888';
+        ctx.font = `${descSize}px monospace`;
+        ctx.fillText(sponsor.description, panelX + 24 + iconSize + 8, iy + itemH * 0.65);
+
+        const bonusSize = isPortrait ? 10 * uiScale : 11;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffd700';
+        ctx.font = `bold ${bonusSize}px monospace`;
+        ctx.fillText(`+${(sponsor.coinBonus * 100).toFixed(0)}% 💰  -${(sponsor.shopDiscount * 100).toFixed(0)}% 🏪`, panelX + panelW - 24, iy + itemH * 0.35);
+
+        if (game.sponsorTab === 'available') {
+          ctx.fillStyle = '#00ff66';
+          ctx.font = `bold ${bonusSize}px monospace`;
+          ctx.fillText('按确认签约 →', panelX + panelW - 24, iy + itemH * 0.65);
+        } else {
+          const conditions = career.getSponsorConditionProgress(sponsorId);
+          const metCount = conditions.filter(c => c.current >= c.target).length;
+          ctx.fillStyle = metCount === conditions.length ? '#00ff66' : '#ff6600';
+          ctx.fillText(`条件 ${metCount}/${conditions.length}`, panelX + panelW - 24, iy + itemH * 0.65);
+        }
+      }
+    }
+
+    const hintSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${hintSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('← → 切换页签  |  ↑↓ 选择  |  确认 签约/详情  |  ESC 返回', centerX, panelY + panelH - 12 * uiScale);
+
+    ctx.restore();
+  }
+
+  _drawSponsorDetail(game, ctx, x, y, w, h, uiScale, isPortrait) {
+    const career = game.career;
+    const sponsorId = game._sponsorDetailId;
+    const sponsor = career.getSponsorById(sponsorId);
+    if (!sponsor) return;
+
+    const centerX = x + w / 2;
+    const padding = 20 * uiScale;
+
+    ctx.fillStyle = `${sponsor.color}15`;
+    ctx.beginPath();
+    ctx.roundRect(x + 8, y, w - 16, h, 12 * uiScale);
+    ctx.fill();
+
+    const iconSize = isPortrait ? 36 * uiScale : 42;
+    ctx.font = `${iconSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(sponsor.icon, centerX, y + iconSize + 8);
+
+    const nameSize = isPortrait ? 18 * uiScale : 22;
+    ctx.fillStyle = sponsor.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = sponsor.color;
+    ctx.font = `bold ${nameSize}px monospace`;
+    ctx.fillText(sponsor.name, centerX, y + iconSize + nameSize + 16);
+    ctx.shadowBlur = 0;
+
+    const descSize = isPortrait ? 11 * uiScale : 13;
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${descSize}px monospace`;
+    ctx.fillText(sponsor.description, centerX, y + iconSize + nameSize + descSize + 26);
+
+    const infoY = y + iconSize + nameSize + descSize + 44;
+    const infoW = w - padding * 2;
+    const infoH = isPortrait ? 42 * uiScale : 48;
+
+    const infos = [
+      { label: '奖金加成', value: `+${(sponsor.coinBonus * 100).toFixed(0)}%`, color: '#ffd700', icon: '💰' },
+      { label: '商店折扣', value: `-${(sponsor.shopDiscount * 100).toFixed(0)}%`, color: '#00ff66', icon: '🏪' }
+    ];
+    const infoGap = isPortrait ? 10 * uiScale : 14;
+    const infoItemW = (infoW - infoGap) / 2;
+
+    infos.forEach((info, i) => {
+      const ix = x + padding + i * (infoItemW + infoGap);
+      ctx.fillStyle = `${info.color}12`;
+      ctx.beginPath();
+      ctx.roundRect(ix, infoY, infoItemW, infoH, 8 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = `${info.color}40`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(ix, infoY, infoItemW, infoH, 8 * uiScale);
+      ctx.stroke();
+
+      const labelSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = '#888';
+      ctx.font = `${labelSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${info.icon} ${info.label}`, ix + 10, infoY + infoH * 0.4);
+
+      ctx.fillStyle = info.color;
+      ctx.font = `bold ${isPortrait ? 15 * uiScale : 18}px monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(info.value, ix + infoItemW - 10, infoY + infoH * 0.7);
+    });
+
+    if (sponsor.unlockEngines && sponsor.unlockEngines.length > 0) {
+      const unlockY = infoY + infoH + 8 * uiScale;
+      const unlockSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = '#ff00ff';
+      ctx.font = `bold ${unlockSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`🔓 解锁引擎: ${sponsor.unlockEngines.map(i => EngineUpgrades[i] ? EngineUpgrades[i].name : `#${i}`).join(', ')}`, x + padding, unlockY + 14);
+    }
+
+    if (sponsor.unlockTires && sponsor.unlockTires.length > 0) {
+      const unlockY = infoY + infoH + (sponsor.unlockEngines && sponsor.unlockEngines.length > 0 ? 24 : 8) * uiScale;
+      const unlockSize = isPortrait ? 10 * uiScale : 11;
+      ctx.fillStyle = '#00f5ff';
+      ctx.font = `bold ${unlockSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`🔓 解锁轮胎: ${sponsor.unlockTires.map(i => TireTypes[i] ? TireTypes[i].name : `#${i}`).join(', ')}`, x + padding, unlockY + 14);
+    }
+
+    const condStartY = infoY + infoH + (sponsor.unlockEngines && sponsor.unlockEngines.length > 0 ? 38 : 22) * uiScale +
+      (sponsor.unlockTires && sponsor.unlockTires.length > 0 ? 22 : 0) * uiScale;
+
+    ctx.fillStyle = '#888';
+    const condTitleSize = isPortrait ? 12 * uiScale : 14;
+    ctx.font = `bold ${condTitleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('📋 合约条件', centerX, condStartY);
+
+    const conditions = career.getSponsorConditionProgress(sponsorId);
+    const condItemH = isPortrait ? 32 * uiScale : 36;
+    const condGap = isPortrait ? 6 * uiScale : 8;
+
+    conditions.forEach((cond, i) => {
+      const cy = condStartY + 14 + i * (condItemH + condGap);
+      const met = cond.current >= cond.target;
+      const progress = Math.min(1, cond.current / cond.target);
+
+      ctx.fillStyle = met ? 'rgba(0, 255, 102, 0.08)' : 'rgba(255, 255, 255, 0.03)';
+      ctx.beginPath();
+      ctx.roundRect(x + padding, cy, infoW, condItemH, 8 * uiScale);
+      ctx.fill();
+
+      const barW = infoW * 0.35;
+      const barH = 6;
+      const barX = x + padding + infoW - barW - 10;
+      const barY = cy + condItemH / 2 - barH / 2;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 3);
+      ctx.fill();
+
+      ctx.fillStyle = met ? '#00ff66' : sponsor.color;
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW * progress, barH, 3);
+      ctx.fill();
+
+      const condSize = isPortrait ? 11 * uiScale : 12;
+      ctx.fillStyle = met ? '#00ff66' : '#ccc';
+      ctx.font = `${condSize}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText(`${met ? '✅' : '⬜'} ${cond.description}`, x + padding + 10, cy + condItemH * 0.62);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = met ? '#00ff66' : '#888';
+      ctx.font = `bold ${condSize}px monospace`;
+      const currentDisplay = cond.type === SponsorConditionType.DRIFT_DISTANCE || cond.type === SponsorConditionType.DRIFT_PER_LAP
+        ? Math.floor(cond.current) : cond.current;
+      ctx.fillText(`${currentDisplay}/${cond.target}`, barX - 8, cy + condItemH * 0.62);
+    });
+
+    const allMet = conditions.every(c => c.current >= c.target);
+    if (allMet) {
+      const completeY = condStartY + 14 + conditions.length * (condItemH + condGap) + 8;
+      const pulse = Math.sin(Date.now() * 0.005) * 0.2 + 0.8;
+      ctx.fillStyle = `rgba(0, 255, 102, ${0.15 * pulse})`;
+      ctx.beginPath();
+      ctx.roundRect(x + padding, completeY, infoW, isPortrait ? 32 * uiScale : 36, 8 * uiScale);
+      ctx.fill();
+      ctx.fillStyle = '#00ff66';
+      ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('✅ 合约条件已全部达成！', centerX, completeY + (isPortrait ? 22 * uiScale : 24));
+    }
+
+    const backSize = isPortrait ? 10 * uiScale : 11;
+    ctx.fillStyle = '#555';
+    ctx.font = `${backSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('确认 / ESC 返回列表', centerX, y + h - 12 * uiScale);
   }
 
   drawWeatherEffects(weatherSystem, player) {

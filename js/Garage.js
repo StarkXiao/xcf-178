@@ -438,11 +438,13 @@ class GarageManager {
   }
 
   isEngineUnlocked(index) {
-    return this.upgrades.engines && this.upgrades.engines.includes(index);
+    if (this.upgrades.engines && this.upgrades.engines.includes(index)) return true;
+    return this.career.getSponsorUnlockedEngines().includes(index);
   }
 
   isTireUnlocked(index) {
-    return this.upgrades.tires && this.upgrades.tires.includes(index);
+    if (this.upgrades.tires && this.upgrades.tires.includes(index)) return true;
+    return this.career.getSponsorUnlockedTires().includes(index);
   }
 
   isPaintUnlocked(index) {
@@ -453,36 +455,45 @@ class GarageManager {
     return this.upgrades.drifts && this.upgrades.drifts.includes(index);
   }
 
+  getEffectiveCost(baseCost) {
+    return this.career.getDiscountedPrice(baseCost);
+  }
+
   canBuyEngine(index) {
     if (this.isEngineUnlocked(index)) return false;
     if (index > 0 && !this.isEngineUnlocked(index - 1)) return false;
     const engine = EngineUpgrades[index];
-    return this.career.coins >= engine.cost;
+    const cost = this.getEffectiveCost(engine.cost);
+    return this.career.coins >= cost;
   }
 
   canBuyTire(index) {
     if (this.isTireUnlocked(index)) return false;
     const tire = TireTypes[index];
-    return this.career.coins >= tire.cost;
+    const cost = this.getEffectiveCost(tire.cost);
+    return this.career.coins >= cost;
   }
 
   canBuyPaint(index) {
     if (this.isPaintUnlocked(index)) return false;
     const paint = PaintColors[index];
-    return this.career.coins >= paint.cost;
+    const cost = this.getEffectiveCost(paint.cost);
+    return this.career.coins >= cost;
   }
 
   canBuyDrift(index) {
     if (this.isDriftUnlocked(index)) return false;
     if (index > 0 && !this.isDriftUnlocked(index - 1)) return false;
     const drift = DriftTuningPresets[index];
-    return this.career.coins >= drift.cost;
+    const cost = this.getEffectiveCost(drift.cost);
+    return this.career.coins >= cost;
   }
 
   buyEngine(index) {
     if (!this.canBuyEngine(index)) return false;
     const engine = EngineUpgrades[index];
-    this.career.coins -= engine.cost;
+    const cost = this.getEffectiveCost(engine.cost);
+    this.career.coins -= cost;
     this.upgrades.engines.push(index);
     this.selectedEngineIndex = index;
     this._saveUpgrades();
@@ -493,7 +504,8 @@ class GarageManager {
   buyTire(index) {
     if (!this.canBuyTire(index)) return false;
     const tire = TireTypes[index];
-    this.career.coins -= tire.cost;
+    const cost = this.getEffectiveCost(tire.cost);
+    this.career.coins -= cost;
     this.upgrades.tires.push(index);
     this.selectedTireIndex = index;
     this._saveUpgrades();
@@ -504,7 +516,8 @@ class GarageManager {
   buyPaint(index) {
     if (!this.canBuyPaint(index)) return false;
     const paint = PaintColors[index];
-    this.career.coins -= paint.cost;
+    const cost = this.getEffectiveCost(paint.cost);
+    this.career.coins -= cost;
     this.upgrades.paints.push(index);
     this.selectedPaintIndex = index;
     this._saveUpgrades();
@@ -515,7 +528,8 @@ class GarageManager {
   buyDrift(index) {
     if (!this.canBuyDrift(index)) return false;
     const drift = DriftTuningPresets[index];
-    this.career.coins -= drift.cost;
+    const cost = this.getEffectiveCost(drift.cost);
+    this.career.coins -= cost;
     this.upgrades.drifts.push(index);
     this.selectedDriftIndex = index;
     this._saveUpgrades();

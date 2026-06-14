@@ -10,6 +10,7 @@ const GameState = {
   CAREER_UPGRADE: 'careerUpgrade',
   CAREER_STAGE_CLEAR: 'careerStageClear',
   CAREER_RACE_RESULT: 'careerRaceResult',
+  SPONSOR: 'sponsor',
   COUNTDOWN: 'countdown',
   RACING: 'racing',
   WANTED_CHASE: 'wantedChase',
@@ -177,7 +178,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 12;
+    this.menuItemCount = 13;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
@@ -198,6 +199,10 @@ class Game {
     this._isCareerMode = false;
     this.garageCategoryCursor = 0;
     this.garageItemCursor = 0;
+
+    this.sponsorCursor = 0;
+    this.sponsorTab = 'active';
+    this._sponsorDetailId = null;
 
     this.track = null;
     this.player = null;
@@ -399,6 +404,8 @@ class Game {
           this.state = GameState.CAREER_MAP;
         }
         this.touchManager.vibrate('menuSelect');
+      } else if (this.state === GameState.SPONSOR) {
+        this._handleSponsorClick(e);
       } else if (this.state === GameState.GARAGE) {
         this._handleGarageClick(e);
       } else if (this.state === GameState.PAUSED) {
@@ -721,6 +728,7 @@ class Game {
     const itemY9 = itemY8 + itemSpacing;
     const itemY10 = itemY9 + itemSpacing;
     const itemY11 = itemY10 + itemSpacing;
+    const itemY12 = itemY11 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -766,6 +774,9 @@ class Game {
         this.startSplitScreen();
       } else if (y >= itemY11 && y < itemY11 + 45) {
         this.menuCursor = 11;
+        this._openSponsor();
+      } else if (y >= itemY12 && y < itemY12 + 45) {
+        this.menuCursor = 12;
         this.startGame();
       }
     }
@@ -855,6 +866,9 @@ class Game {
       case GameState.CAREER_RACE_RESULT:
         this._updateCareerRaceResult();
         break;
+      case GameState.SPONSOR:
+        this._updateSponsor();
+        break;
       case GameState.COUNTDOWN:
         this._updateCountdown(dt);
         break;
@@ -938,6 +952,10 @@ class Game {
         this.startSplitScreen();
       }
     } else if (this.menuCursor === 11) {
+      if (this.input.isMenuConfirm()) {
+        this._openSponsor();
+      }
+    } else if (this.menuCursor === 12) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -1401,6 +1419,127 @@ class Game {
     this.input.clearJustPressed();
   }
 
+  _openSponsor() {
+    this.sponsorCursor = 0;
+    this.sponsorTab = 'active';
+    this._sponsorDetailId = null;
+    this._sponsorReturnState = this.state;
+    this.state = GameState.SPONSOR;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _updateSponsor() {
+    if (this._sponsorDetailId) {
+      if (this.input.isMenuConfirm() || this.input.keys['Escape']) {
+        this.input.keys['Escape'] = false;
+        this._sponsorDetailId = null;
+        this.touchManager.vibrate('menuSelect');
+      }
+      this.input.clearJustPressed();
+      return;
+    }
+
+    const activeSponsors = this.career.activeSponsors;
+    const availableSponsors = SponsorContracts.filter(s => this.career.isSponsorAvailable(s.id));
+    const currentList = this.sponsorTab === 'active' ? activeSponsors : availableSponsors.map(s => s.id);
+    const maxCursor = Math.max(0, currentList.length - 1);
+
+    if (this.input.isMenuUp()) {
+      this.sponsorCursor = Math.max(0, this.sponsorCursor - 1);
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      this.sponsorCursor = Math.min(maxCursor, this.sponsorCursor + 1);
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuLeft() || this.input.isMenuRight()) {
+      this.sponsorTab = this.sponsorTab === 'active' ? 'available' : 'active';
+      this.sponsorCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuConfirm()) {
+      if (currentList.length > 0 && this.sponsorCursor < currentList.length) {
+        const sponsorId = currentList[this.sponsorCursor];
+        if (this.sponsorTab === 'available') {
+          this.career.activateSponsor(sponsorId);
+          this.touchManager.vibrate('menuSelect');
+        } else {
+          this._sponsorDetailId = sponsorId;
+          this.touchManager.vibrate('menuSelect');
+        }
+      }
+    }
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = this._sponsorReturnState || GameState.CAREER_MAP;
+      this.touchManager.vibrate('menuSelect');
+    }
+    this.input.clearJustPressed();
+  }
+
+  _handleSponsorClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (this._sponsorDetailId) {
+      this._sponsorDetailId = null;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const uiScale = this.renderer._getUIScale();
+    const isPortrait = this.renderer.isPortrait();
+    const centerX = this.canvas.width / 2;
+
+    const panelW = isPortrait ? Math.min(350 * uiScale, this.canvas.width * 0.92) : 460;
+    const panelX = centerX - panelW / 2;
+    const tabY = isPortrait ? 70 * uiScale : 80;
+    const tabH = isPortrait ? 36 * uiScale : 40;
+    const tabW = panelW / 2;
+
+    if (y >= tabY && y <= tabY + tabH) {
+      if (x >= panelX && x <= panelX + tabW) {
+        this.sponsorTab = 'active';
+        this.sponsorCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= panelX + tabW && x <= panelX + tabW * 2) {
+        this.sponsorTab = 'available';
+        this.sponsorCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    const activeSponsors = this.career.activeSponsors;
+    const availableSponsors = SponsorContracts.filter(s => this.career.isSponsorAvailable(s.id));
+    const currentList = this.sponsorTab === 'active' ? activeSponsors : availableSponsors.map(s => s.id);
+
+    const listY = tabY + tabH + 10 * uiScale;
+    const itemH = isPortrait ? 72 * uiScale : 80;
+    const itemGap = isPortrait ? 8 * uiScale : 10;
+
+    for (let i = 0; i < currentList.length; i++) {
+      const iy = listY + i * (itemH + itemGap);
+      if (y >= iy && y <= iy + itemH) {
+        this.sponsorCursor = i;
+        const sponsorId = currentList[i];
+        if (this.sponsorTab === 'available') {
+          this.career.activateSponsor(sponsorId);
+        } else {
+          this._sponsorDetailId = sponsorId;
+        }
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    this.state = this._sponsorReturnState || GameState.CAREER_MAP;
+    this.touchManager.vibrate('menuSelect');
+  }
+
   _updateVehicleSelect() {
     if (this.input.isMenuUp()) {
       this.vehicleSelectCursor = (this.vehicleSelectCursor - 1 + VehicleTypeKeys.length) % VehicleTypeKeys.length;
@@ -1756,6 +1895,10 @@ class Game {
       return;
     }
 
+    if (this._checkCareerMapSponsorClick(x, y, isPortrait, uiScale)) {
+      return;
+    }
+
     if (this._checkCareerMapStageNavClick(x, y, isPortrait, uiScale, centerX)) {
       return;
     }
@@ -1763,6 +1906,19 @@ class Game {
     if (this._checkCareerMapEventClick(x, y, isPortrait, uiScale, centerX)) {
       return;
     }
+  }
+
+  _checkCareerMapSponsorClick(x, y, isPortrait, uiScale) {
+    const btnW = isPortrait ? 100 * uiScale : 110;
+    const btnH = isPortrait ? 36 * uiScale : 40;
+    const btnX = this.canvas.width - (isPortrait ? 15 * uiScale : 20) - btnW;
+    const btnY = isPortrait ? 60 * uiScale : 65;
+
+    if (x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH) {
+      this._openSponsor();
+      return true;
+    }
+    return false;
   }
 
   _checkCareerMapBackClick(x, y, isPortrait, uiScale) {
@@ -2504,16 +2660,22 @@ class Game {
       if (this._isCareerMode && this.career.selectedEventId) {
         const weatherSummary = this.weatherSystem.finishRaceWeatherRecording();
 
+        const raceStats = {
+          driftDistance: this.player.totalDriftDistance || 0,
+          bikeCollisions: this.player.bikeCollisions || 0,
+          obstacleCollisions: this.player.obstacleCollisions || 0,
+          totalLaps: this.totalLaps
+        };
+
         const result = this.career.processRaceResult(
           this.career.selectedEventId,
           finalRank,
           finalTime,
           finalBestLap,
           this.totalLaps,
-          weatherSummary
+          weatherSummary,
+          raceStats
         );
-
-        const weatherBonusCoins = 0;
 
         this.careerRaceResultData = {
           rank: finalRank,
@@ -2522,10 +2684,12 @@ class Game {
           correctedTime: result.correctedTime || finalTime,
           adjustedBestLap: result.adjustedBestLap || finalBestLap,
           coinsEarned: result.coinsEarned,
+          sponsorBonusCoins: result.sponsorBonusCoins || 0,
+          sponsorDetails: result.sponsorDetails || [],
           isNewBest: result.isNewBest,
           totalLaps: this.totalLaps,
           eventId: this.career.selectedEventId,
-          weatherBonus: weatherBonusCoins,
+          weatherBonus: 0,
           weatherName: this.weatherSystem.getWeatherName(),
           weatherInfo: result.weatherInfo || null,
           weatherSummary: weatherSummary
@@ -3321,6 +3485,11 @@ class Game {
 
     if (this.state === GameState.CAREER_RACE_RESULT) {
       this.renderer.drawCareerRaceResult(this);
+      return;
+    }
+
+    if (this.state === GameState.SPONSOR) {
+      this.renderer.drawSponsor(this);
       return;
     }
 
