@@ -18,7 +18,9 @@ const GameState = {
   PAUSED: 'paused',
   FINISHED: 'finished',
   SPLITSCREEN_FINISHED: 'splitscreenFinished',
-  RACE_EDITOR: 'raceEditor'
+  RACE_EDITOR: 'raceEditor',
+  LEADERBOARD: 'leaderboard',
+  NICKNAME_REQUIRED: 'nicknameRequired'
 };
 
 const VehicleTypes = {
@@ -178,7 +180,7 @@ class Game {
     this.totalLaps = 3;
     this.lapIndex = 1;
     this.menuCursor = 0;
-    this.menuItemCount = 13;
+    this.menuItemCount = 14;
     this.selectedVehicle = this._loadVehicleSelection();
     this.vehicleSelectCursor = VehicleTypeKeys.indexOf(this.selectedVehicle);
     this.achievementCursor = 0;
@@ -209,6 +211,19 @@ class Game {
     this.sponsorCursor = 0;
     this.sponsorTab = 'active';
     this._sponsorDetailId = null;
+
+    this.leaderboard = new SeasonLeaderboardManager();
+    this.leaderboardTab = 'nickname';
+    this.leaderboardTrackFilter = 'all';
+    this.leaderboardSortKey = 'bestTime';
+    this.leaderboardSeasonFilter = 'all';
+    this.leaderboardCursor = 0;
+    this.leaderboardScrollY = 0;
+    this._leaderboardNicknameBuffer = '';
+    this._leaderboardResetConfirm = false;
+    this._leaderboardDetailNickname = null;
+    this._nicknameReturnState = null;
+    this._nicknameSkipAllowed = true;
 
     this.track = null;
     this.player = null;
@@ -410,6 +425,10 @@ class Game {
         this.touchManager.vibrate('menuSelect');
       } else if (this.state === GameState.SPONSOR) {
         this._handleSponsorClick(e);
+      } else if (this.state === GameState.LEADERBOARD) {
+        this._handleLeaderboardClick(e);
+      } else if (this.state === GameState.NICKNAME_REQUIRED) {
+        this._handleNicknameRequiredClick(e);
       } else if (this.state === GameState.GARAGE) {
         this._handleGarageClick(e);
       } else if (this.state === GameState.PAUSED) {
@@ -733,6 +752,7 @@ class Game {
     const itemY10 = itemY9 + itemSpacing;
     const itemY11 = itemY10 + itemSpacing;
     const itemY12 = itemY11 + itemSpacing;
+    const itemY13 = itemY12 + itemSpacing;
 
     if (x >= panelX && x <= panelX + panelW) {
       if (y >= itemY0 && y < itemY0 + 45) {
@@ -781,6 +801,9 @@ class Game {
         this._openSponsor();
       } else if (y >= itemY12 && y < itemY12 + 45) {
         this.menuCursor = 12;
+        this._openLeaderboard();
+      } else if (y >= itemY13 && y < itemY13 + 45) {
+        this.menuCursor = 13;
         this.startGame();
       }
     }
@@ -873,6 +896,12 @@ class Game {
       case GameState.SPONSOR:
         this._updateSponsor();
         break;
+      case GameState.LEADERBOARD:
+        this._updateLeaderboard();
+        break;
+      case GameState.NICKNAME_REQUIRED:
+        this._updateNicknameRequired();
+        break;
       case GameState.COUNTDOWN:
         this._updateCountdown(dt);
         break;
@@ -960,6 +989,10 @@ class Game {
         this._openSponsor();
       }
     } else if (this.menuCursor === 12) {
+      if (this.input.isMenuConfirm()) {
+        this._openLeaderboard();
+      }
+    } else if (this.menuCursor === 13) {
       if (this.input.isMenuConfirm()) {
         this.startGame();
       }
@@ -1099,6 +1132,14 @@ class Game {
   _startCareerRace() {
     const selected = this.career.getSelectedEvent();
     if (!selected) return;
+
+    if (!this.leaderboard.hasNickname()) {
+      this._nicknameReturnState = GameState.CAREER_EVENT;
+      this._nicknameSkipAllowed = false;
+      this.state = GameState.NICKNAME_REQUIRED;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
 
     const event = selected.event;
     const stage = selected.stage;
@@ -1545,6 +1586,469 @@ class Game {
 
     this.state = this._sponsorReturnState || GameState.CAREER_MAP;
     this.touchManager.vibrate('menuSelect');
+  }
+
+  _openLeaderboard() {
+    this.leaderboardTab = 'nickname';
+    this.leaderboardTrackFilter = 'all';
+    this.leaderboardSortKey = 'bestTime';
+    this.leaderboardSeasonFilter = 'all';
+    this.leaderboardCursor = 0;
+    this.leaderboardScrollY = 0;
+    this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+    this._leaderboardResetConfirm = false;
+    this._leaderboardDetailNickname = null;
+    this.state = GameState.LEADERBOARD;
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _updateNicknameRequired() {
+    if (this.leaderboard.hasNickname()) {
+      this._proceedAfterNicknameSet();
+      return;
+    }
+
+    if (this.input.isMenuConfirm()) {
+      this.leaderboardTab = 'nickname';
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+      this._leaderboardResetConfirm = false;
+      this._leaderboardDetailNickname = null;
+      this.state = GameState.LEADERBOARD;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    if (this._nicknameSkipAllowed && this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this.state = this._nicknameReturnState || GameState.MENU;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _proceedAfterNicknameSet() {
+    const returnState = this._nicknameReturnState;
+    this._nicknameReturnState = null;
+    this._nicknameSkipAllowed = false;
+    if (returnState === GameState.CAREER_EVENT) {
+      this._startCareerRace();
+    } else {
+      this.startGame();
+    }
+  }
+
+  _handleNicknameRequiredClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const uiScale = this.renderer._getUIScale();
+    const isPortrait = this.renderer.isPortrait();
+    const centerX = this.canvas.width / 2;
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, this.canvas.width * 0.92) : 520;
+    const btnW = isPortrait ? 220 * uiScale : 260;
+    const btnH = isPortrait ? 52 * uiScale : 56;
+
+    const setBtnY = this.canvas.height / 2 + (isPortrait ? 30 * uiScale : 30);
+    const setBtnX = centerX - btnW / 2;
+
+    if (x >= setBtnX && x <= setBtnX + btnW && y >= setBtnY && y <= setBtnY + btnH) {
+      this.leaderboardTab = 'nickname';
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+      this._leaderboardResetConfirm = false;
+      this._leaderboardDetailNickname = null;
+      this.state = GameState.LEADERBOARD;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    if (this._nicknameSkipAllowed) {
+      const skipBtnY = setBtnY + btnH + (isPortrait ? 12 * uiScale : 14);
+      const skipBtnW = isPortrait ? 160 * uiScale : 180;
+      const skipBtnX = centerX - skipBtnW / 2;
+      if (x >= skipBtnX && x <= skipBtnX + skipBtnW && y >= skipBtnY && y <= skipBtnY + btnH * 0.75) {
+        this.state = this._nicknameReturnState || GameState.MENU;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    this.touchManager.vibrate('menuSelect');
+  }
+
+  _updateLeaderboard() {
+    if (this._leaderboardDetailNickname) {
+      if (this.input.isMenuConfirm() || this.input.keys['Escape']) {
+        this.input.keys['Escape'] = false;
+        this._leaderboardDetailNickname = null;
+        this.touchManager.vibrate('menuSelect');
+      }
+      this.input.clearJustPressed();
+      return;
+    }
+
+    if (this.leaderboardTab === 'nickname') {
+      this._updateLeaderboardNickname();
+      return;
+    }
+
+    const getCurrentEntries = () => this.leaderboard.getLeaderboard({
+      trackFilter: this.leaderboardTrackFilter,
+      sortKey: this.leaderboardSortKey,
+      seasonFilter: this.leaderboardSeasonFilter
+    });
+
+    if (this.input.isMenuUp()) {
+      const entries = getCurrentEntries();
+      this.leaderboardCursor = Math.max(0, Math.min(entries.length - 1, this.leaderboardCursor - 1));
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuDown()) {
+      const entries = getCurrentEntries();
+      this.leaderboardCursor = Math.max(0, Math.min(entries.length - 1, this.leaderboardCursor + 1));
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuLeft()) {
+      const filterIdx = LeaderboardTrackKeys.indexOf(this.leaderboardTrackFilter);
+      this.leaderboardTrackFilter = LeaderboardTrackKeys[(filterIdx - 1 + LeaderboardTrackKeys.length) % LeaderboardTrackKeys.length];
+      this.leaderboardCursor = 0;
+      this.leaderboardScrollY = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+    if (this.input.isMenuRight()) {
+      const filterIdx = LeaderboardTrackKeys.indexOf(this.leaderboardTrackFilter);
+      this.leaderboardTrackFilter = LeaderboardTrackKeys[(filterIdx + 1) % LeaderboardTrackKeys.length];
+      this.leaderboardCursor = 0;
+      this.leaderboardScrollY = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.keys['KeyS']) {
+      this.input.keys['KeyS'] = false;
+      const sortIdx = LeaderboardFilterKeys.indexOf(this.leaderboardSortKey);
+      this.leaderboardSortKey = LeaderboardFilterKeys[(sortIdx + 1) % LeaderboardFilterKeys.length];
+      this.leaderboardCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.keys['KeyW']) {
+      this.input.keys['KeyW'] = false;
+      const seasonIdx = LeaderboardSeasonKeys.indexOf(this.leaderboardSeasonFilter);
+      this.leaderboardSeasonFilter = LeaderboardSeasonKeys[(seasonIdx + 1) % LeaderboardSeasonKeys.length];
+      this.leaderboardCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.isMenuConfirm()) {
+      const entries = getCurrentEntries();
+      if (this.leaderboardCursor < entries.length) {
+        this._leaderboardDetailNickname = entries[this.leaderboardCursor].nickname;
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+
+    if (this.input.keys['KeyR']) {
+      this.input.keys['KeyR'] = false;
+      if (this._leaderboardResetConfirm) {
+        this._leaderboardResetConfirm = false;
+        this.touchManager.vibrate('menuSelect');
+      } else if (this.leaderboard.canReset()) {
+        this._leaderboardResetConfirm = true;
+        this.touchManager.vibrate('menuSelect');
+      }
+    }
+
+    if (this._leaderboardResetConfirm && this.input.isMenuConfirm()) {
+      this.leaderboard.resetLeaderboard();
+      this._leaderboardResetConfirm = false;
+      this.leaderboardCursor = 0;
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      this._leaderboardResetConfirm = false;
+      if (this._nicknameReturnState && this.leaderboard.hasNickname()) {
+        this._proceedAfterNicknameSet();
+        this._nicknameReturnState = null;
+      } else {
+        this.state = GameState.MENU;
+        this.menuCursor = 12;
+        this._nicknameReturnState = null;
+      }
+      this.touchManager.vibrate('menuSelect');
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _updateLeaderboardNickname() {
+    if (this.input.keys['Escape']) {
+      this.input.keys['Escape'] = false;
+      if (this._nicknameReturnState) {
+        if (this.leaderboard.hasNickname()) {
+          this._proceedAfterNicknameSet();
+        } else if (this._nicknameSkipAllowed) {
+          this.state = this._nicknameReturnState;
+          this._nicknameReturnState = null;
+        } else {
+          this.state = GameState.MENU;
+          this._nicknameReturnState = null;
+          this.menuCursor = 12;
+        }
+      } else {
+        this.state = GameState.MENU;
+        this.menuCursor = 12;
+      }
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    if (this.input.keys['Backspace']) {
+      this.input.keys['Backspace'] = false;
+      this.leaderboard.removeNicknameChar();
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+      return;
+    }
+
+    if (this.input.isMenuConfirm()) {
+      if (this.leaderboard.hasNickname()) {
+        this.touchManager.vibrate('menuSelect');
+        if (this._nicknameReturnState) {
+          this._proceedAfterNicknameSet();
+          this._nicknameReturnState = null;
+        } else {
+          this.leaderboardTab = 'leaderboard';
+          this.leaderboardCursor = 0;
+        }
+      }
+      return;
+    }
+
+    if (this.input.keys['Tab']) {
+      this.input.keys['Tab'] = false;
+      if (this._nicknameReturnState && this.leaderboard.hasNickname()) {
+        this._proceedAfterNicknameSet();
+        this._nicknameReturnState = null;
+      } else {
+        this.leaderboardTab = 'leaderboard';
+        this.leaderboardCursor = 0;
+      }
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    for (const key of Object.keys(this.input.keys)) {
+      if (this.input.keys[key] && key.startsWith('Key')) {
+        this.input.keys[key] = false;
+        const charCode = key.replace('Key', '');
+        if (charCode.length === 1) {
+          const shiftHeld = this.input.keys['ShiftLeft'] || this.input.keys['ShiftRight'];
+          const ch = shiftHeld ? charCode : charCode.toLowerCase();
+          this.leaderboard.addNicknameChar(ch);
+          this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+        }
+      }
+    }
+
+    for (let i = 0; i <= 9; i++) {
+      const keyName = `Digit${i}`;
+      if (this.input.keys[keyName]) {
+        this.input.keys[keyName] = false;
+        this.leaderboard.addNicknameChar(String(i));
+        this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+      }
+    }
+
+    if (this.input.keys['Minus']) {
+      this.input.keys['Minus'] = false;
+      this.leaderboard.addNicknameChar('-');
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+    }
+    if (this.input.keys['Period']) {
+      this.input.keys['Period'] = false;
+      this.leaderboard.addNicknameChar('.');
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+    }
+    if (this.input.keys['Underscore'] || (this.input.keys['ShiftLeft'] && this.input.keys['Minus'])) {
+      this.input.keys['Underscore'] = false;
+      this.leaderboard.addNicknameChar('_');
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+    }
+
+    this.input.clearJustPressed();
+  }
+
+  _handleLeaderboardClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const uiScale = this.renderer._getUIScale();
+    const isPortrait = this.renderer.isPortrait();
+    const centerX = this.canvas.width / 2;
+
+    if (this._leaderboardDetailNickname) {
+      this._leaderboardDetailNickname = null;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, this.canvas.width * 0.92) : 520;
+    const panelX = centerX - panelW / 2;
+
+    const backBtnW = isPortrait ? 80 * uiScale : 90;
+    const backBtnH = isPortrait ? 32 * uiScale : 36;
+    const backBtnX = isPortrait ? 15 * uiScale : 20;
+    const backBtnY = isPortrait ? 20 * uiScale : 20;
+
+    if (x >= backBtnX && x <= backBtnX + backBtnW &&
+        y >= backBtnY && y <= backBtnY + backBtnH) {
+      this.state = GameState.MENU;
+      this.menuCursor = 12;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const tabY = isPortrait ? 60 * uiScale : 70;
+    const tabH = isPortrait ? 32 * uiScale : 36;
+    const tabW = panelW / 2;
+
+    if (y >= tabY && y <= tabY + tabH) {
+      if (x >= panelX && x <= panelX + tabW) {
+        this.leaderboardTab = 'nickname';
+        this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= panelX + tabW && x <= panelX + tabW * 2) {
+        this.leaderboardTab = 'leaderboard';
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    if (this.leaderboardTab === 'nickname') {
+      this._handleLeaderboardNicknameClick(x, y, uiScale, isPortrait, panelX, panelW);
+      return;
+    }
+
+    const filterY = tabY + tabH + (isPortrait ? 8 * uiScale : 10);
+    const filterH = isPortrait ? 28 * uiScale : 32;
+    const filterW = panelW / 3;
+
+    if (y >= filterY && y <= filterY + filterH) {
+      if (x >= panelX && x <= panelX + filterW) {
+        const idx = LeaderboardTrackKeys.indexOf(this.leaderboardTrackFilter);
+        this.leaderboardTrackFilter = LeaderboardTrackKeys[(idx + 1) % LeaderboardTrackKeys.length];
+        this.leaderboardCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= panelX + filterW && x <= panelX + filterW * 2) {
+        const idx = LeaderboardFilterKeys.indexOf(this.leaderboardSortKey);
+        this.leaderboardSortKey = LeaderboardFilterKeys[(idx + 1) % LeaderboardFilterKeys.length];
+        this.leaderboardCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+      if (x >= panelX + filterW * 2 && x <= panelX + filterW * 3) {
+        const idx = LeaderboardSeasonKeys.indexOf(this.leaderboardSeasonFilter);
+        this.leaderboardSeasonFilter = LeaderboardSeasonKeys[(idx + 1) % LeaderboardSeasonKeys.length];
+        this.leaderboardCursor = 0;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+
+    const entries = this.leaderboard.getLeaderboard({
+      trackFilter: this.leaderboardTrackFilter,
+      sortKey: this.leaderboardSortKey,
+      seasonFilter: this.leaderboardSeasonFilter
+    });
+
+    const listY = filterY + filterH + (isPortrait ? 8 * uiScale : 10);
+    const itemH = isPortrait ? 44 * uiScale : 52;
+    const itemGap = isPortrait ? 4 * uiScale : 6;
+
+    for (let i = 0; i < entries.length; i++) {
+      const iy = listY + i * (itemH + itemGap);
+      if (y >= iy && y <= iy + itemH) {
+        this.leaderboardCursor = i;
+        this._leaderboardDetailNickname = entries[i].nickname;
+        this.touchManager.vibrate('menuSelect');
+        return;
+      }
+    }
+  }
+
+  _handleLeaderboardNicknameClick(x, y, uiScale, isPortrait, panelX, panelW) {
+    const centerX = this.canvas.width / 2;
+    const inputY = isPortrait ? 160 * uiScale : 180;
+    const inputW = isPortrait ? 280 * uiScale : 340;
+    const inputH = isPortrait ? 48 * uiScale : 56;
+    const inputX = centerX - inputW / 2;
+
+    if (y >= inputY && y <= inputY + inputH) {
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const charGridY = inputY + inputH + (isPortrait ? 16 * uiScale : 20);
+    const charSize = isPortrait ? 32 * uiScale : 36;
+    const charGap = isPortrait ? 4 * uiScale : 5;
+    const charsPerRow = isPortrait ? 10 : 14;
+    const rows = Math.ceil(LeaderboardNicknameChars.length / charsPerRow);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < charsPerRow; c++) {
+        const charIdx = r * charsPerRow + c;
+        if (charIdx >= LeaderboardNicknameChars.length) break;
+        const cx = inputX + c * (charSize + charGap);
+        const cy = charGridY + r * (charSize + charGap);
+        if (x >= cx && x <= cx + charSize && y >= cy && y <= cy + charSize) {
+          this.leaderboard.addNicknameChar(LeaderboardNicknameChars[charIdx]);
+          this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+          this.touchManager.vibrate('menuSelect');
+          return;
+        }
+      }
+    }
+
+    const delBtnY = charGridY + rows * (charSize + charGap) + (isPortrait ? 8 * uiScale : 10);
+    const delBtnW = isPortrait ? 100 * uiScale : 120;
+    const delBtnH = isPortrait ? 36 * uiScale : 40;
+    const delBtnX = centerX - delBtnW / 2;
+
+    if (x >= delBtnX && x <= delBtnX + delBtnW &&
+        y >= delBtnY && y <= delBtnY + delBtnH) {
+      this.leaderboard.removeNicknameChar();
+      this._leaderboardNicknameBuffer = this.leaderboard.getNickname();
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
+    const confirmBtnY = delBtnY + delBtnH + (isPortrait ? 10 * uiScale : 12);
+    const confirmBtnW = isPortrait ? 140 * uiScale : 160;
+    const confirmBtnH = isPortrait ? 40 * uiScale : 44;
+    const confirmBtnX = centerX - confirmBtnW / 2;
+
+    if (x >= confirmBtnX && x <= confirmBtnX + confirmBtnW &&
+        y >= confirmBtnY && y <= confirmBtnY + confirmBtnH) {
+      if (this.leaderboard.hasNickname()) {
+        if (this._nicknameReturnState) {
+          this._proceedAfterNicknameSet();
+        } else {
+          this.leaderboardTab = 'leaderboard';
+          this.leaderboardCursor = 0;
+        }
+        this.touchManager.vibrate('menuSelect');
+      }
+      return;
+    }
   }
 
   _updateVehicleSelect() {
@@ -2274,6 +2778,14 @@ class Game {
   }
 
   startGame() {
+    if (!this.leaderboard.hasNickname()) {
+      this._nicknameReturnState = GameState.MENU;
+      this._nicknameSkipAllowed = true;
+      this.state = GameState.NICKNAME_REQUIRED;
+      this.touchManager.vibrate('menuSelect');
+      return;
+    }
+
     this._isWantedMode = false;
     this._isSplitScreen = false;
     this.input.enableSplitScreen(false);
@@ -2733,11 +3245,46 @@ class Game {
         };
 
         this.state = GameState.CAREER_RACE_RESULT;
+
+        this._recordLeaderboardResult(finalRank, finalTime, finalBestLap);
       } else {
         this.weatherSystem.finishRaceWeatherRecording();
         this.state = GameState.FINISHED;
+
+        this._recordLeaderboardResult(finalRank, finalTime, finalBestLap);
       }
     }
+  }
+
+  _recordLeaderboardResult(rank, time, bestLap) {
+    let eventId = null;
+    let stageId = null;
+    let season = null;
+
+    if (this._isCareerMode && this.career.selectedEventId) {
+      eventId = this.career.selectedEventId;
+      const eventInfo = this.career.getEventById(eventId);
+      if (eventInfo) {
+        stageId = eventInfo.stage.id;
+        season = eventInfo.stage.season || 'spring';
+      }
+    } else {
+      eventId = `quick_${this.difficulty}_${this.totalLaps}`;
+      stageId = 'all';
+      season = 'spring';
+    }
+
+    this.leaderboard.recordRace({
+      eventId,
+      stageId,
+      season,
+      rank,
+      time,
+      bestLap,
+      vehicleType: this.selectedVehicle,
+      difficulty: this.difficulty,
+      weatherType: this.weatherSystem.getCurrentWeather()
+    });
   }
 
   _finalizeSplitscreenRace() {
@@ -3530,6 +4077,16 @@ class Game {
 
     if (this.state === GameState.SPONSOR) {
       this.renderer.drawSponsor(this);
+      return;
+    }
+
+    if (this.state === GameState.LEADERBOARD) {
+      this.renderer.drawLeaderboard(this);
+      return;
+    }
+
+    if (this.state === GameState.NICKNAME_REQUIRED) {
+      this.renderer.drawNicknameRequired(this);
       return;
     }
 

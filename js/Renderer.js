@@ -2955,7 +2955,7 @@ class Renderer {
     ctx.textAlign = 'center';
 
     const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
-    const panelH = isPortrait ? 570 * uiScale : 570;
+    const panelH = isPortrait ? 610 * uiScale : 610;
     const panelX = centerX - panelW / 2;
     const panelY = isPortrait ? titleY + 50 * uiScale : centerY - 140;
 
@@ -2987,6 +2987,7 @@ class Renderer {
     const btnOffset10 = btnOffset9 + itemSpacing;
     const btnOffset11 = btnOffset10 + itemSpacing;
     const btnOffset12 = btnOffset11 + itemSpacing;
+    const btnOffset13 = btnOffset12 + itemSpacing;
 
     const vehicle = VehicleTypes[game.selectedVehicle];
 
@@ -3074,12 +3075,19 @@ class Renderer {
 
     this._drawMenuButton(
       panelX, panelY + btnOffset12, panelW,
-      '🏁 开始游戏',
+      '🏆 赛季排行榜',
       game.menuCursor === 12, uiScale,
       '#00ff66'
     );
 
-    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset12 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
+    this._drawMenuButton(
+      panelX, panelY + btnOffset13, panelW,
+      '🏁 开始游戏',
+      game.menuCursor === 13, uiScale,
+      '#00ff66'
+    );
+
+    this._drawTouchSettingsSummary(game, panelX + 10 * uiScale, panelY + btnOffset13 + 30 * uiScale, panelW - 20 * uiScale, uiScale);
 
     const hintSize = isPortrait ? 10 * uiScale : 12;
     ctx.fillStyle = '#555';
@@ -9556,5 +9564,759 @@ class Renderer {
       ctx.fillStyle = unlockSource.color || '#ff6666';
       ctx.fillText(unlockSource.label, x + w / 2, y + btnH + 18);
     }
+  }
+
+  drawLeaderboard(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.95)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const titleSize = isPortrait ? 24 * uiScale : 30;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#00ff66';
+    ctx.fillStyle = '#00ff66';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 赛季排行榜', centerX, isPortrait ? 30 * uiScale : 35);
+    ctx.shadowBlur = 0;
+
+    const backBtnW = isPortrait ? 80 * uiScale : 90;
+    const backBtnH = isPortrait ? 32 * uiScale : 36;
+    const backBtnX = isPortrait ? 15 * uiScale : 20;
+    const backBtnY = isPortrait ? 20 * uiScale : 20;
+
+    ctx.fillStyle = 'rgba(40, 40, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(backBtnX, backBtnY, backBtnW, backBtnH, 6 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(backBtnX, backBtnY, backBtnW, backBtnH, 6 * uiScale);
+    ctx.stroke();
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${isPortrait ? 12 * uiScale : 14}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('← 返回', backBtnX + backBtnW / 2, backBtnY + backBtnH * 0.65);
+
+    const panelW = isPortrait ? Math.min(360 * uiScale, this.width * 0.92) : 520;
+    const panelX = centerX - panelW / 2;
+
+    const tabY = isPortrait ? 55 * uiScale : 60;
+    const tabH = isPortrait ? 32 * uiScale : 36;
+    const tabW = panelW / 2;
+
+    const isNicknameTab = game.leaderboardTab === 'nickname';
+    ctx.fillStyle = isNicknameTab ? 'rgba(0, 255, 102, 0.15)' : 'rgba(40, 40, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, tabY, tabW, tabH, 6 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = isNicknameTab ? '#00ff66' : '#555';
+    ctx.lineWidth = isNicknameTab ? 2 : 1;
+    if (isNicknameTab) { ctx.shadowBlur = 8; ctx.shadowColor = '#00ff66'; }
+    ctx.beginPath();
+    ctx.roundRect(panelX, tabY, tabW, tabH, 6 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = isNicknameTab ? '#00ff66' : '#888';
+    ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('✏️ 昵称', panelX + tabW / 2, tabY + tabH * 0.65);
+
+    ctx.fillStyle = !isNicknameTab ? 'rgba(0, 245, 255, 0.15)' : 'rgba(40, 40, 60, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + tabW, tabY, tabW, tabH, 6 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = !isNicknameTab ? '#00f5ff' : '#555';
+    ctx.lineWidth = !isNicknameTab ? 2 : 1;
+    if (!isNicknameTab) { ctx.shadowBlur = 8; ctx.shadowColor = '#00f5ff'; }
+    ctx.beginPath();
+    ctx.roundRect(panelX + tabW, tabY, tabW, tabH, 6 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = !isNicknameTab ? '#00f5ff' : '#888';
+    ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('📊 排行榜', panelX + tabW + tabW / 2, tabY + tabH * 0.65);
+
+    if (isNicknameTab) {
+      this._drawLeaderboardNickname(game, ctx, panelX, tabY + tabH, panelW, uiScale, isPortrait);
+    } else {
+      this._drawLeaderboardList(game, ctx, panelX, tabY + tabH, panelW, uiScale, isPortrait);
+    }
+
+    if (game._leaderboardDetailNickname) {
+      this._drawLeaderboardDetail(game, ctx, uiScale, isPortrait);
+    }
+
+    ctx.restore();
+  }
+
+  _drawLeaderboardNickname(game, ctx, panelX, startY, panelW, uiScale, isPortrait) {
+    const centerX = this.width / 2;
+    const padding = isPortrait ? 12 * uiScale : 16;
+
+    const hintY = startY + (isPortrait ? 16 * uiScale : 20);
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${isPortrait ? 12 * uiScale : 14}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('输入你的昵称，录入赛季排行榜', centerX, hintY);
+
+    const inputY = hintY + (isPortrait ? 16 * uiScale : 22);
+    const inputW = isPortrait ? 280 * uiScale : 340;
+    const inputH = isPortrait ? 48 * uiScale : 56;
+    const inputX = centerX - inputW / 2;
+
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(inputX, inputY, inputW, inputH, 8 * uiScale);
+    ctx.fill();
+
+    ctx.strokeStyle = game.leaderboard.hasNickname() ? '#00ff66' : '#ff6600';
+    ctx.lineWidth = 2;
+    if (game.leaderboard.hasNickname()) { ctx.shadowBlur = 8; ctx.shadowColor = '#00ff66'; }
+    else { ctx.shadowBlur = 8; ctx.shadowColor = '#ff6600'; }
+    ctx.beginPath();
+    ctx.roundRect(inputX, inputY, inputW, inputH, 8 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const nick = game.leaderboard.getNickname();
+    const cursorVisible = Math.floor(Date.now() / 500) % 2 === 0;
+    const nickDisplay = nick + (cursorVisible ? '_' : '');
+    const nickSize = isPortrait ? 22 * uiScale : 26;
+
+    if (nick.length === 0) {
+      ctx.fillStyle = '#555';
+      ctx.font = `${nickSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('输入昵称...', centerX, inputY + inputH * 0.62);
+    } else {
+      ctx.fillStyle = '#00ff66';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#00ff66';
+      ctx.font = `bold ${nickSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(nickDisplay, centerX, inputY + inputH * 0.62);
+      ctx.shadowBlur = 0;
+    }
+
+    const charCountY = inputY + inputH + (isPortrait ? 4 * uiScale : 6);
+    ctx.fillStyle = '#666';
+    ctx.font = `${isPortrait ? 10 * uiScale : 11}px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${nick.length}/${MaxNicknameLength}`, inputX + inputW, charCountY + 10);
+
+    const charGridY = charCountY + (isPortrait ? 14 * uiScale : 18);
+    const charSize = isPortrait ? 32 * uiScale : 36;
+    const charGap = isPortrait ? 4 * uiScale : 5;
+    const charsPerRow = isPortrait ? 10 : 14;
+
+    for (let i = 0; i < LeaderboardNicknameChars.length; i++) {
+      const r = Math.floor(i / charsPerRow);
+      const c = i % charsPerRow;
+      const cx = inputX + c * (charSize + charGap);
+      const cy = charGridY + r * (charSize + charGap);
+
+      ctx.fillStyle = 'rgba(40, 40, 60, 0.8)';
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, charSize, charSize, 4 * uiScale);
+      ctx.fill();
+
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, charSize, charSize, 4 * uiScale);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ccc';
+      ctx.font = `bold ${isPortrait ? 14 * uiScale : 16}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(LeaderboardNicknameChars[i], cx + charSize / 2, cy + charSize * 0.68);
+    }
+
+    const rows = Math.ceil(LeaderboardNicknameChars.length / charsPerRow);
+    const delBtnY = charGridY + rows * (charSize + charGap) + (isPortrait ? 8 * uiScale : 10);
+    const delBtnW = isPortrait ? 100 * uiScale : 120;
+    const delBtnH = isPortrait ? 36 * uiScale : 40;
+    const delBtnX = centerX - delBtnW / 2;
+
+    ctx.fillStyle = 'rgba(80, 20, 20, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(delBtnX, delBtnY, delBtnW, delBtnH, 6 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(delBtnX, delBtnY, delBtnW, delBtnH, 6 * uiScale);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ff4444';
+    ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('⌫ 删除', delBtnX + delBtnW / 2, delBtnY + delBtnH * 0.65);
+
+    const confirmBtnY = delBtnY + delBtnH + (isPortrait ? 10 * uiScale : 12);
+    const confirmBtnW = isPortrait ? 140 * uiScale : 160;
+    const confirmBtnH = isPortrait ? 40 * uiScale : 44;
+    const confirmBtnX = centerX - confirmBtnW / 2;
+    const canConfirm = game.leaderboard.hasNickname();
+
+    ctx.fillStyle = canConfirm ? 'rgba(0, 80, 40, 0.8)' : 'rgba(40, 40, 40, 0.6)';
+    ctx.beginPath();
+    ctx.roundRect(confirmBtnX, confirmBtnY, confirmBtnW, confirmBtnH, 8 * uiScale);
+    ctx.fill();
+
+    if (canConfirm) {
+      ctx.strokeStyle = '#00ff66';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#00ff66';
+    } else {
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+    }
+    ctx.beginPath();
+    ctx.roundRect(confirmBtnX, confirmBtnY, confirmBtnW, confirmBtnH, 8 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = canConfirm ? '#00ff66' : '#555';
+    ctx.font = `bold ${isPortrait ? 15 * uiScale : 17}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ 确认并进入排行榜', confirmBtnX + confirmBtnW / 2, confirmBtnY + confirmBtnH * 0.62);
+  }
+
+  _drawLeaderboardList(game, ctx, panelX, startY, panelW, uiScale, isPortrait) {
+    const centerX = this.width / 2;
+    const padding = isPortrait ? 10 * uiScale : 14;
+
+    const filterY = startY + (isPortrait ? 8 * uiScale : 10);
+    const filterH = isPortrait ? 28 * uiScale : 32;
+    const filterW = panelW / 3;
+
+    const trackName = LeaderboardTrackNames[game.leaderboardTrackFilter] || '全部';
+    const trackColor = LeaderboardTrackColors[game.leaderboardTrackFilter] || '#00f5ff';
+
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = trackColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.stroke();
+    ctx.fillStyle = trackColor;
+    ctx.font = `bold ${isPortrait ? 11 * uiScale : 12}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`🏁 ${trackName}`, panelX + filterW / 2, filterY + filterH * 0.65);
+
+    const sortName = LeaderboardFilterNames[game.leaderboardSortKey] || '总用时';
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + filterW, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX + filterW, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.stroke();
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = `bold ${isPortrait ? 11 * uiScale : 12}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`📊 ${sortName}`, panelX + filterW + filterW / 2, filterY + filterH * 0.65);
+
+    const seasonName = LeaderboardSeasonNames[game.leaderboardSeasonFilter] || '全赛季';
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(panelX + filterW * 2, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ffff00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX + filterW * 2, filterY, filterW - 2, filterH, 4 * uiScale);
+    ctx.stroke();
+    ctx.fillStyle = '#ffff00';
+    ctx.font = `bold ${isPortrait ? 11 * uiScale : 12}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`🌤 ${seasonName}`, panelX + filterW * 2 + filterW / 2, filterY + filterH * 0.65);
+
+    const entries = game.leaderboard.getLeaderboard({
+      trackFilter: game.leaderboardTrackFilter,
+      sortKey: game.leaderboardSortKey,
+      seasonFilter: game.leaderboardSeasonFilter
+    });
+
+    const listY = filterY + filterH + (isPortrait ? 8 * uiScale : 10);
+    const itemH = isPortrait ? 44 * uiScale : 52;
+    const itemGap = isPortrait ? 4 * uiScale : 6;
+    const statsH = isPortrait ? 48 * uiScale : 56;
+    const footerH = isPortrait ? 40 * uiScale : 44;
+    const availableH = this.height - listY - statsH - footerH - (isPortrait ? 10 * uiScale : 12);
+    const maxVisible = Math.max(1, Math.floor(availableH / (itemH + itemGap)));
+
+    game.leaderboardCursor = Math.max(0, Math.min(entries.length - 1, game.leaderboardCursor));
+    const scrollTop = entries.length > maxVisible
+      ? Math.max(0, Math.min(game.leaderboardCursor - Math.floor(maxVisible / 2), entries.length - maxVisible))
+      : 0;
+    game.leaderboardScrollY = scrollTop;
+
+    if (entries.length === 0) {
+      ctx.fillStyle = '#555';
+      ctx.font = `${isPortrait ? 14 * uiScale : 16}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无排行记录', centerX, listY + 60);
+      ctx.fillStyle = '#444';
+      ctx.font = `${isPortrait ? 11 * uiScale : 13}px monospace`;
+      ctx.fillText('完成比赛后成绩将自动归档', centerX, listY + 85);
+    } else {
+      const playerNickname = game.leaderboard.getNickname();
+      let playerRankIdx = -1;
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].nickname === playerNickname) {
+          playerRankIdx = i;
+          break;
+        }
+      }
+
+      for (let vi = 0; vi < maxVisible; vi++) {
+        const idx = scrollTop + vi;
+        if (idx >= entries.length) break;
+        const entry = entries[idx];
+        const iy = listY + vi * (itemH + itemGap);
+        const isSelected = game.leaderboardCursor === idx;
+        const isPlayer = entry.nickname === playerNickname;
+        const isTop3 = idx < 3;
+
+        let bgColor = 'rgba(20, 20, 40, 0.9)';
+        if (isSelected) bgColor = 'rgba(0, 245, 255, 0.12)';
+        else if (isPlayer) bgColor = 'rgba(0, 255, 102, 0.08)';
+        else if (isTop3) bgColor = 'rgba(60, 50, 20, 0.5)';
+
+        ctx.fillStyle = bgColor;
+        ctx.beginPath();
+        ctx.roundRect(panelX + padding, iy, panelW - 2 * padding, itemH, 6 * uiScale);
+        ctx.fill();
+
+        if (isSelected) {
+          ctx.strokeStyle = '#00f5ff';
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#00f5ff';
+          ctx.beginPath();
+          ctx.roundRect(panelX + padding, iy, panelW - 2 * padding, itemH, 6 * uiScale);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        } else if (isPlayer) {
+          ctx.strokeStyle = '#00ff66';
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#00ff66';
+          ctx.beginPath();
+          ctx.roundRect(panelX + padding, iy, panelW - 2 * padding, itemH, 6 * uiScale);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        } else if (isTop3) {
+          ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(panelX + padding, iy, panelW - 2 * padding, itemH, 6 * uiScale);
+          ctx.stroke();
+        }
+
+        const rank = idx + 1;
+        let rankIcon = `${rank}`;
+        let rankColor = '#888';
+        if (rank === 1) { rankIcon = '🥇'; rankColor = '#ffd700'; }
+        else if (rank === 2) { rankIcon = '🥈'; rankColor = '#c0c0c0'; }
+        else if (rank === 3) { rankIcon = '🥉'; rankColor = '#cd7f32'; }
+
+        ctx.fillStyle = rankColor;
+        ctx.font = `bold ${isPortrait ? 16 * uiScale : 20}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(rankIcon, panelX + padding + (isPortrait ? 20 * uiScale : 25), iy + itemH * 0.6);
+
+        ctx.fillStyle = isPlayer ? '#00ff66' : '#ccc';
+        ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+        ctx.textAlign = 'left';
+        const nickX = panelX + padding + (isPortrait ? 42 * uiScale : 50);
+        const nickW = panelW - 2 * padding - (isPortrait ? 120 * uiScale : 140);
+        let displayName = entry.nickname;
+        if (displayName.length > 10 && !isPortrait) displayName = displayName.substring(0, 9) + '…';
+        if (displayName.length > 8 && isPortrait) displayName = displayName.substring(0, 7) + '…';
+        ctx.fillText(displayName, nickX, iy + itemH * 0.6);
+
+        if (isPlayer) {
+          ctx.fillStyle = '#00ff66';
+          ctx.font = `${isPortrait ? 8 * uiScale : 9}px monospace`;
+          ctx.fillText('← 你', nickX, iy + itemH * 0.88);
+        }
+
+        const stats = [];
+        if (entry.bestTime < Infinity) {
+          stats.push(Utils.formatTime(entry.bestTime));
+        }
+        if (entry.bestLap < Infinity) {
+          stats.push(`圈 ${Utils.formatTime(entry.bestLap)}`);
+        }
+        if (entry.totalWins > 0) {
+          stats.push(`🏆${entry.totalWins}`);
+        }
+
+        ctx.fillStyle = game.leaderboardSortKey === 'mostWins' && entry.totalWins > 0 ? '#ffd700' : '#888';
+        ctx.font = `${isPortrait ? 10 * uiScale : 12}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(stats.join('  '), panelX + panelW - padding - 8, iy + itemH * 0.6);
+
+        ctx.fillStyle = '#555';
+        ctx.font = `${isPortrait ? 9 * uiScale : 10}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.fillText(`${entry.raceCount}场`, panelX + panelW - padding - 8, iy + itemH * 0.85);
+      }
+
+      if (entries.length > maxVisible) {
+        const scrollbarX = panelX + panelW - padding - 4;
+        const scrollbarY = listY;
+        const scrollbarH = maxVisible * (itemH + itemGap) - itemGap;
+        const thumbH = Math.max(itemH * 0.5, scrollbarH * (maxVisible / entries.length));
+        const thumbMaxY = scrollbarY + scrollbarH - thumbH;
+        const thumbY = entries.length > maxVisible
+          ? scrollbarY + (thumbMaxY - scrollbarY) * (scrollTop / (entries.length - maxVisible))
+          : scrollbarY;
+
+        ctx.fillStyle = 'rgba(100, 100, 120, 0.3)';
+        ctx.fillRect(scrollbarX, scrollbarY, 3, scrollbarH);
+        ctx.fillStyle = 'rgba(0, 245, 255, 0.6)';
+        ctx.fillRect(scrollbarX, thumbY, 3, thumbH);
+      }
+
+      if (playerRankIdx >= 0 && playerRankIdx >= scrollTop + maxVisible) {
+        const hintY = listY + maxVisible * (itemH + itemGap) - itemGap - 2;
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.8)';
+        ctx.font = `${isPortrait ? 9 * uiScale : 10}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`↓ 你的排名 #${playerRankIdx + 1}`, centerX, hintY);
+      }
+      if (playerRankIdx >= 0 && playerRankIdx < scrollTop) {
+        const hintY = listY - 4;
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.8)';
+        ctx.font = `${isPortrait ? 9 * uiScale : 10}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`↑ 你的排名 #${playerRankIdx + 1}`, centerX, hintY);
+      }
+    }
+
+    const stats = game.leaderboard.getStats();
+    const statsY = this.height - footerH - statsH + (isPortrait ? 4 * uiScale : 6);
+    const statItemW = (panelW - 2 * padding) / 4;
+
+    const statLabels = ['记录', '车手', '冠军', '最佳'];
+    const statValues = [
+      stats.totalRecords,
+      stats.uniquePlayers,
+      stats.totalWins,
+      stats.bestTime < Infinity ? Utils.formatTime(stats.bestTime).substring(3) : '--:--'
+    ];
+    const statColors = ['#888', '#00f5ff', '#ffd700', '#00ff66'];
+
+    for (let i = 0; i < 4; i++) {
+      const sx = panelX + padding + i * statItemW;
+      ctx.fillStyle = 'rgba(30, 30, 50, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(sx + 2, statsY, statItemW - 4, statsH - 8, 4 * uiScale);
+      ctx.fill();
+
+      ctx.fillStyle = statColors[i];
+      ctx.font = `bold ${isPortrait ? 13 * uiScale : 15}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(String(statValues[i]), sx + statItemW / 2, statsY + statsH * 0.45);
+
+      ctx.fillStyle = '#666';
+      ctx.font = `${isPortrait ? 9 * uiScale : 10}px monospace`;
+      ctx.fillText(statLabels[i], sx + statItemW / 2, statsY + statsH * 0.82);
+    }
+
+    const footerY = this.height - (isPortrait ? 20 * uiScale : 24);
+    ctx.fillStyle = '#555';
+    ctx.font = `${isPortrait ? 10 * uiScale : 11}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('←→ 赛道筛选  S排序  W赛季  R重置  Enter详情  ESC返回', centerX, footerY);
+
+    if (game.leaderboard.getNickname()) {
+      const myRank = game.leaderboard.getPlayerRank({
+        trackFilter: game.leaderboardTrackFilter,
+        sortKey: game.leaderboardSortKey,
+        seasonFilter: game.leaderboardSeasonFilter
+      });
+      ctx.fillStyle = '#00ff66';
+      ctx.font = `${isPortrait ? 10 * uiScale : 11}px monospace`;
+      if (myRank > 0) {
+        ctx.fillText(` | 你的排名: #${myRank}`, centerX + 180 * uiScale, footerY);
+      } else {
+        ctx.fillText(` | 暂无排名`, centerX + 180 * uiScale, footerY);
+      }
+    }
+
+    if (game._leaderboardResetConfirm) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      const dialogW = isPortrait ? 280 * uiScale : 360;
+      const dialogH = isPortrait ? 140 * uiScale : 160;
+      const dialogX = centerX - dialogW / 2;
+      const dialogY = (this.height - dialogH) / 2;
+
+      ctx.fillStyle = 'rgba(40, 10, 10, 0.95)';
+      ctx.beginPath();
+      ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 12 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = '#ff0044';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff0044';
+      ctx.beginPath();
+      ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 12 * uiScale);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#ff4444';
+      ctx.font = `bold ${isPortrait ? 16 * uiScale : 20}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ 确认重置排行榜？', centerX, dialogY + 40 * uiScale);
+
+      ctx.fillStyle = '#aaa';
+      ctx.font = `${isPortrait ? 12 * uiScale : 14}px monospace`;
+      ctx.fillText('所有排行记录将被永久删除', centerX, dialogY + 70 * uiScale);
+
+      ctx.fillStyle = '#ff6666';
+      ctx.font = `bold ${isPortrait ? 13 * uiScale : 14}px monospace`;
+      ctx.fillText('按 Enter 确认重置', centerX, dialogY + 100 * uiScale);
+      ctx.fillStyle = '#888';
+      ctx.font = `${isPortrait ? 11 * uiScale : 13}px monospace`;
+      ctx.fillText('按 R 取消', centerX, dialogY + 120 * uiScale);
+    }
+  }
+
+  _drawLeaderboardDetail(game, ctx, uiScale, isPortrait) {
+    const centerX = this.width / 2;
+    const nickname = game._leaderboardDetailNickname;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const dialogW = isPortrait ? Math.min(340 * uiScale, this.width * 0.92) : 480;
+    const dialogH = isPortrait ? 380 * uiScale : 420;
+    const dialogX = centerX - dialogW / 2;
+    const dialogY = (this.height - dialogH) / 2;
+
+    ctx.fillStyle = 'rgba(15, 15, 35, 0.97)';
+    ctx.beginPath();
+    ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 12 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#00f5ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#00f5ff';
+    ctx.beginPath();
+    ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 12 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.font = `bold ${isPortrait ? 18 * uiScale : 22}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`📋 ${nickname}`, centerX, dialogY + (isPortrait ? 35 * uiScale : 42));
+
+    const details = game.leaderboard.getEntryDetails(nickname, {
+      trackFilter: game.leaderboardTrackFilter,
+      seasonFilter: game.leaderboardSeasonFilter
+    });
+
+    if (details.length === 0) {
+      ctx.fillStyle = '#666';
+      ctx.font = `${isPortrait ? 13 * uiScale : 15}px monospace`;
+      ctx.fillText('暂无详细记录', centerX, dialogY + dialogH / 2);
+    } else {
+      const itemH = isPortrait ? 38 * uiScale : 44;
+      const itemGap = isPortrait ? 4 * uiScale : 6;
+      const startY = dialogY + (isPortrait ? 50 * uiScale : 60);
+      const maxShow = Math.min(details.length, Math.floor((dialogH - (isPortrait ? 90 * uiScale : 100)) / (itemH + itemGap)));
+
+      for (let i = 0; i < maxShow; i++) {
+        const detail = details[i];
+        const iy = startY + i * (itemH + itemGap);
+
+        ctx.fillStyle = 'rgba(20, 20, 40, 0.8)';
+        ctx.beginPath();
+        ctx.roundRect(dialogX + 10, iy, dialogW - 20, itemH, 4 * uiScale);
+        ctx.fill();
+
+        const stageInfo = CareerStages.find(s => s.id === detail.stageId);
+        const stageName = stageInfo ? stageInfo.name : detail.stageId;
+        const stageColor = stageInfo ? stageInfo.color : '#888';
+
+        ctx.fillStyle = stageColor;
+        ctx.font = `bold ${isPortrait ? 11 * uiScale : 12}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText(stageName, dialogX + 20, iy + itemH * 0.45);
+
+        ctx.fillStyle = '#ccc';
+        ctx.font = `${isPortrait ? 10 * uiScale : 12}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText(detail.rank === 1 ? '🥇' : `#${detail.rank}`, dialogX + 20, iy + itemH * 0.8);
+
+        if (detail.time < Infinity) {
+          ctx.fillStyle = '#00ff66';
+          ctx.font = `bold ${isPortrait ? 11 * uiScale : 13}px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText(Utils.formatTime(detail.time), dialogX + dialogW - 20, iy + itemH * 0.45);
+        }
+
+        if (detail.bestLap < Infinity) {
+          ctx.fillStyle = '#ff00ff';
+          ctx.font = `${isPortrait ? 9 * uiScale : 11}px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText(`最快圈 ${Utils.formatTime(detail.bestLap)}`, dialogX + dialogW - 20, iy + itemH * 0.8);
+        }
+
+        if (detail.wins > 0) {
+          ctx.fillStyle = '#ffd700';
+          ctx.font = `${isPortrait ? 9 * uiScale : 11}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`🏆${detail.wins}`, dialogX + dialogW / 2, iy + itemH * 0.8);
+        }
+      }
+
+      if (details.length > maxShow) {
+        ctx.fillStyle = '#666';
+        ctx.font = `${isPortrait ? 10 * uiScale : 12}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`...还有 ${details.length - maxShow} 条记录`, centerX, startY + maxShow * (itemH + itemGap));
+      }
+    }
+
+    ctx.fillStyle = '#888';
+    ctx.font = `${isPortrait ? 11 * uiScale : 13}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('按任意键关闭', centerX, dialogY + dialogH - (isPortrait ? 15 * uiScale : 20));
+  }
+
+  drawNicknameRequired(game) {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    ctx.fillStyle = 'rgba(10, 10, 26, 0.96)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const dialogW = isPortrait ? Math.min(360 * uiScale, this.width * 0.92) : 520;
+    const dialogH = isPortrait ? 340 * uiScale : 360;
+    const dialogX = centerX - dialogW / 2;
+    const dialogY = centerY - dialogH / 2;
+
+    ctx.fillStyle = 'rgba(20, 10, 30, 0.97)';
+    ctx.beginPath();
+    ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 14 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#ff6600';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = '#ff6600';
+    ctx.beginPath();
+    ctx.roundRect(dialogX, dialogY, dialogW, dialogH, 14 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const iconSize = isPortrait ? 56 * uiScale : 64;
+    ctx.font = `${iconSize}px serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('👤', centerX, dialogY + (isPortrait ? 75 * uiScale : 80));
+
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#ff6600';
+    ctx.fillStyle = '#ff9944';
+    ctx.font = `bold ${isPortrait ? 20 * uiScale : 24}px monospace`;
+    ctx.fillText('请先设置昵称', centerX, dialogY + (isPortrait ? 120 * uiScale : 130));
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#aaa';
+    ctx.font = `${isPortrait ? 12 * uiScale : 14}px monospace`;
+    ctx.fillText('赛季排行榜需要昵称来记录你的成绩', centerX, dialogY + (isPortrait ? 150 * uiScale : 165));
+    ctx.fillStyle = '#888';
+    ctx.font = `${isPortrait ? 11 * uiScale : 13}px monospace`;
+    ctx.fillText('设置完成后将自动开始比赛', centerX, dialogY + (isPortrait ? 172 * uiScale : 190));
+
+    const btnW = isPortrait ? 220 * uiScale : 260;
+    const btnH = isPortrait ? 52 * uiScale : 56;
+    const btnX = centerX - btnW / 2;
+    const btnY = dialogY + (isPortrait ? 200 * uiScale : 220);
+
+    ctx.fillStyle = 'rgba(0, 100, 50, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, 10 * uiScale);
+    ctx.fill();
+    ctx.strokeStyle = '#00ff66';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00ff66';
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY, btnW, btnH, 10 * uiScale);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#00ff66';
+    ctx.font = `bold ${isPortrait ? 15 * uiScale : 17}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('✏️ 设置昵称 (Enter)', centerX, btnY + btnH * 0.65);
+
+    if (game._nicknameSkipAllowed) {
+      const skipBtnH = isPortrait ? 38 * uiScale : 40;
+      const skipBtnY = btnY + btnH + (isPortrait ? 12 * uiScale : 14);
+      const skipBtnW = isPortrait ? 160 * uiScale : 180;
+      const skipBtnX = centerX - skipBtnW / 2;
+
+      ctx.fillStyle = 'rgba(60, 60, 60, 0.7)';
+      ctx.beginPath();
+      ctx.roundRect(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6 * uiScale);
+      ctx.fill();
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6 * uiScale);
+      ctx.stroke();
+
+      ctx.fillStyle = '#999';
+      ctx.font = `${isPortrait ? 12 * uiScale : 13}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('跳过 (ESC)', centerX, skipBtnY + skipBtnH * 0.65);
+    }
+
+    const footerY = dialogY + dialogH - (isPortrait ? 18 * uiScale : 22);
+    ctx.fillStyle = '#ffaa66';
+    ctx.font = `bold ${isPortrait ? 12 * uiScale : 14}px monospace`;
+    ctx.textAlign = 'center';
+    if (game._nicknameReturnState === GameState.CAREER_EVENT) {
+      ctx.fillText('🏁 职业生涯模式必须设置昵称', centerX, footerY);
+    } else {
+      ctx.fillText('💡 未设置昵称的成绩将不会被记录', centerX, footerY);
+    }
+
+    ctx.restore();
   }
 }
