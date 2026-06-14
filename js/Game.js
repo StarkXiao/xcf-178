@@ -213,8 +213,11 @@ class Game {
 
     this.raceEditor = null;
     this.replaySystem = null;
+    this.ghostReplay = null;
     this._editorConfig = null;
     this._isEditorMode = false;
+    this._ghostReplayMode = false;
+    this._replayBtnHover = false;
 
     this.wantedSystem = null;
     this._isWantedMode = false;
@@ -254,6 +257,9 @@ class Game {
     }
     if (!this.replaySystem) {
       this.replaySystem = new ReplaySystem(this);
+    }
+    if (!this.ghostReplay) {
+      this.ghostReplay = new GhostReplay(this);
     }
 
     this._setupRace();
@@ -398,7 +404,7 @@ class Game {
       } else if (this.state === GameState.PAUSED) {
         this._handlePauseClick(e);
       } else if (this.state === GameState.FINISHED) {
-        this.startGame();
+        this._handleFinishedClick(e);
       } else if (this.state === GameState.SPLITSCREEN_FINISHED) {
         this.state = GameState.MENU;
         this.menuCursor = 10;
@@ -409,6 +415,12 @@ class Game {
         this.touchManager.vibrate('menuSelect');
       } else if (this.state === GameState.VEHICLE_SELECT_P2) {
         this._handleVehicleSelectP2Click(e);
+      }
+    });
+
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (this.state === GameState.FINISHED) {
+        this._handleFinishedMouseMove(e);
       }
     });
   }
@@ -801,6 +813,11 @@ class Game {
     }
 
     if (this.replaySystem && this.replaySystem.isPlaying()) {
+      return;
+    }
+
+    if (this._ghostReplayMode) {
+      this._updateGhostReplay(dt);
       return;
     }
 
@@ -2085,6 +2102,10 @@ class Game {
       this.replaySystem.startRecording();
     }
 
+    if (this.ghostReplay) {
+      this.ghostReplay.startRaceRecording();
+    }
+
     this._prevStateBeforePause = null;
     this.state = GameState.COUNTDOWN;
     this.countdown = 3;
@@ -2252,6 +2273,15 @@ class Game {
       if (!player) continue;
       const playerInput = this.input.getPlayerInput(playerIndex);
       this._updatePlayerBike(dt, player, playerInput, playerIndex);
+
+      if (this.ghostReplay && playerIndex === 1 && !player.finished) {
+        this.ghostReplay.recordFrame(dt, player);
+      }
+    }
+
+    if (this.ghostReplay && this.player && !this.player.finished) {
+      const ghostState = this.ghostReplay.updateGhost(dt, this.player.lap, this.player.raceTime);
+      this._currentGhostState = ghostState;
     }
 
     this.aiBikes.forEach(ai => {
@@ -2308,6 +2338,13 @@ class Game {
     const prevLapKey = playerIndex === 1 ? '_prevPlayerLap' : '_prevPlayer2Lap';
     if (this[prevLapKey] < player.lap) {
       this[prevLapKey] = player.lap;
+      
+      if (playerIndex === 1 && this.ghostReplay && player.lapTimes.length > 0) {
+        const lastLapTime = player.lapTimes[player.lapTimes.length - 1];
+        this.ghostReplay.onLapComplete(lastLapTime, player.lap);
+        this.ghostReplay.resetGhostForNewLap();
+      }
+      
       if (player.isNewLapRecord) {
         this.touchManager.vibrate('newRecord');
       } else {
@@ -2863,7 +2900,99 @@ class Game {
     }
   }
 
+  _handleFinishedClick(e) {
+    if (!this.ghostReplay || !this.ghostReplay.hasBestLapGhost()) {
+      this.startGame();
+      return;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const replayBtnW = 200;
+    const replayBtnH = 40;
+    const replayBtnX = (this.canvas.width - replayBtnW) / 2;
+    
+    const player = this.player;
+    const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
+    const recordBannerHeight = this.isHistoricalRecord ? 40 : 0;
+    const obstacleStatsHeight = 170;
+    const achievementHeight = (this.achievements._newlyUnlocked && this.achievements._newlyUnlocked.length > 0)
+      ? 55 + this.achievements._newlyUnlocked.length * 28
+      : 0;
+    const rewardHeight = this.quickRaceReward && this.quickRaceReward.coinsEarned > 0 ? 70 : 0;
+    const configHeight = 55;
+    const ghostComparisonHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 140 : 0;
+    const trajectoryCompareHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const segmentAnalysisHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const suggestionsHeight = this.renderer ? this.renderer._getSuggestionsHeight(this) : 80;
+    const replayEntryHeight = 60;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight + ghostComparisonHeight + trajectoryCompareHeight + segmentAnalysisHeight + suggestionsHeight + replayEntryHeight;
+    const panelY = (this.canvas.height - panelHeight) / 2;
+    
+    let infoY = panelY + 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight + ghostComparisonHeight + trajectoryCompareHeight + segmentAnalysisHeight + suggestionsHeight;
+    const replayBtnY = infoY + 35;
+    
+    if (x >= replayBtnX && x <= replayBtnX + replayBtnW &&
+        y >= replayBtnY && y <= replayBtnY + replayBtnH) {
+      this._startGhostReplay();
+      this.touchManager.vibrate('menuSelect');
+    } else {
+      this.startGame();
+    }
+  }
+
+  _handleFinishedMouseMove(e) {
+    if (!this.ghostReplay || !this.ghostReplay.hasBestLapGhost()) {
+      this._replayBtnHover = false;
+      return;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const replayBtnW = 200;
+    const replayBtnH = 40;
+    const replayBtnX = (this.canvas.width - replayBtnW) / 2;
+    
+    const player = this.player;
+    const lapListHeight = player.lapTimes.length > 0 ? player.lapTimes.length * 24 + 55 : 0;
+    const recordBannerHeight = this.isHistoricalRecord ? 40 : 0;
+    const obstacleStatsHeight = 170;
+    const achievementHeight = (this.achievements._newlyUnlocked && this.achievements._newlyUnlocked.length > 0)
+      ? 55 + this.achievements._newlyUnlocked.length * 28
+      : 0;
+    const rewardHeight = this.quickRaceReward && this.quickRaceReward.coinsEarned > 0 ? 70 : 0;
+    const configHeight = 55;
+    const ghostComparisonHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 140 : 0;
+    const trajectoryCompareHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const segmentAnalysisHeight = this.ghostReplay && this.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const suggestionsHeight = this.renderer ? this.renderer._getSuggestionsHeight(this) : 80;
+    const replayEntryHeight = 60;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight + ghostComparisonHeight + trajectoryCompareHeight + segmentAnalysisHeight + suggestionsHeight + replayEntryHeight;
+    const panelY = (this.canvas.height - panelHeight) / 2;
+    
+    let infoY = panelY + 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight + ghostComparisonHeight + trajectoryCompareHeight + segmentAnalysisHeight + suggestionsHeight;
+    const replayBtnY = infoY + 35;
+    
+    const wasHovering = this._replayBtnHover;
+    this._replayBtnHover = (x >= replayBtnX && x <= replayBtnX + replayBtnW &&
+                            y >= replayBtnY && y <= replayBtnY + replayBtnH);
+    
+    if (this._replayBtnHover !== wasHovering) {
+      this.canvas.style.cursor = this._replayBtnHover ? 'pointer' : 'default';
+    }
+  }
+
   _updateFinished() {
+    if (this.input.isKeyJustPressed('r') || this.input.isKeyJustPressed('R')) {
+      this._startGhostReplay();
+      this.input.clearJustPressed();
+      return;
+    }
+
     if (this.input.isMenuConfirm()) {
       if (this._isEditorMode) {
         this._isEditorMode = false;
@@ -2877,6 +3006,73 @@ class Game {
         this.menuCursor = 8;
       }
       this.input.clearJustPressed();
+    }
+  }
+
+  _startGhostReplay() {
+    if (!this.ghostReplay || !this.ghostReplay.hasBestLapGhost()) return;
+    
+    this._ghostReplayMode = true;
+    this.ghostReplay.startReplay();
+    
+    this._savedRaceTime = this.raceTime;
+    this._savedPlayerState = {
+      x: this.player.x,
+      y: this.player.y,
+      angle: this.player.angle,
+      speed: this.player.speed,
+      lap: this.player.lap,
+      raceTime: this.player.raceTime
+    };
+  }
+
+  _stopGhostReplay() {
+    if (this.ghostReplay) {
+      this.ghostReplay.stopReplay();
+    }
+    this._ghostReplayMode = false;
+    
+    if (this._savedPlayerState) {
+      this.player.x = this._savedPlayerState.x;
+      this.player.y = this._savedPlayerState.y;
+      this.player.angle = this._savedPlayerState.angle;
+      this.player.speed = this._savedPlayerState.speed;
+      this.player.lap = this._savedPlayerState.lap;
+      this.player.raceTime = this._savedPlayerState.raceTime;
+      this.raceTime = this._savedRaceTime;
+    }
+    
+    this._currentGhostState = null;
+  }
+
+  _updateGhostReplay(dt) {
+    if (!this._ghostReplayMode || !this.ghostReplay) return;
+    
+    if (this.input.isKeyJustPressed('Escape') || this.input.isKeyJustPressed('esc')) {
+      this._stopGhostReplay();
+      this.input.clearJustPressed();
+      return;
+    }
+    
+    if (this.input.isKeyJustPressed(' ') || this.input.isKeyJustPressed('Space')) {
+      this.ghostReplay.toggleReplayPause();
+      this.input.clearJustPressed();
+      return;
+    }
+    
+    if (this.input.isKeyJustPressed('r') || this.input.isKeyJustPressed('R')) {
+      this.ghostReplay.restartReplayGhost();
+      this.input.clearJustPressed();
+      return;
+    }
+    
+    const ghostState = this.ghostReplay.updateReplay(dt);
+    if (ghostState) {
+      this._currentGhostState = ghostState;
+      
+      if (ghostState.finished) {
+        this.ghostReplay.pauseReplayGhost();
+      }
     }
   }
 
@@ -3128,6 +3324,11 @@ class Game {
       return;
     }
 
+    if (this._ghostReplayMode) {
+      this._renderGhostReplay();
+      return;
+    }
+
     if (this._isSplitScreen && this.player2) {
       this._renderSplitScreen();
     } else {
@@ -3165,6 +3366,20 @@ class Game {
 
     this.renderer.drawWeatherEffects(this.weatherSystem, this.player);
 
+    if (this.ghostReplay && this._currentGhostState && this.state === GameState.RACING) {
+      this.renderer.drawGhostBike(this._currentGhostState, 0.55);
+    }
+
+    if (this.ghostReplay && this.ghostReplay.isGhostTrailVisible() && this.state === GameState.RACING) {
+      const bestTrajectory = this.ghostReplay.getBestLapTrajectory();
+      this.renderer.drawGhostTrail(bestTrajectory, '#ff00ff', 0.3);
+      
+      const currentTrajectory = this.ghostReplay.getCurrentLapTrajectory();
+      if (currentTrajectory.length > 1) {
+        this.renderer.drawCurrentLapTrail(currentTrajectory, 0.5);
+      }
+    }
+
     this.renderer.endTransform();
 
     if (this.state === GameState.COUNTDOWN) {
@@ -3185,6 +3400,54 @@ class Game {
       this.renderer.drawPauseOverlay(this);
     } else if (this.state === GameState.FINISHED) {
       this.renderer.drawFinished(this);
+    }
+  }
+
+  _renderGhostReplay() {
+    if (!this.ghostReplay || !this._currentGhostState) {
+      this.renderer.beginTransform();
+      this.renderer.drawTrack(this.track);
+      this.renderer.endTransform();
+      this.renderer.drawGhostReplayOverlay(this);
+      return;
+    }
+
+    const ghostState = this._currentGhostState;
+    const cameraTarget = {
+      x: ghostState.x,
+      y: ghostState.y,
+      speed: ghostState.speed || 0,
+      maxSpeed: this.player ? this.player.baseMaxSpeed : 320,
+      nitroActive: ghostState.nitro || false
+    };
+
+    this.renderer.updateCamera(cameraTarget, 0.016);
+
+    this.renderer.beginTransform();
+
+    this.renderer.drawTrack(this.track);
+
+    if (this.ghostReplay.isGhostTrailVisible()) {
+      const bestTrajectory = this.ghostReplay.getBestLapTrajectory();
+      this.renderer.drawGhostTrail(bestTrajectory, '#ff00ff', 0.4);
+    }
+
+    this.renderer.drawGhostBike(ghostState, 0.7);
+
+    if (this.weatherSystem) {
+      this.renderer.drawWeatherEffects(this.weatherSystem, cameraTarget);
+    }
+
+    if (ghostState.nitro) {
+      this.renderer.drawSpeedLines(cameraTarget);
+    }
+
+    this.renderer.endTransform();
+
+    this.renderer.drawGhostReplayOverlay(this);
+
+    if (ghostState.nitro) {
+      this.renderer.drawNitroScreenOverlay(cameraTarget);
     }
   }
 

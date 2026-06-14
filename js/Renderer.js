@@ -915,6 +915,325 @@ class Renderer {
     ctx.restore();
   }
 
+  drawGhostBike(ghostState, alpha = 0.5) {
+    if (!ghostState) return;
+    
+    const ctx = this.ctx;
+    
+    ctx.save();
+    ctx.translate(ghostState.x, ghostState.y);
+    ctx.rotate(ghostState.angle + (ghostState.drift || 0) * 0.3);
+    
+    const wheelBase = 24;
+    const halfWidth = 7;
+    
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff00ff';
+    ctx.fillStyle = '#ff00ff';
+    
+    ctx.beginPath();
+    ctx.moveTo(wheelBase * 0.6, 0);
+    ctx.lineTo(wheelBase * 0.2, -halfWidth);
+    ctx.lineTo(-wheelBase * 0.5, -halfWidth * 0.8);
+    ctx.lineTo(-wheelBase * 0.7, 0);
+    ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.8);
+    ctx.lineTo(wheelBase * 0.2, halfWidth);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(wheelBase * 0.1, 0, halfWidth * 0.5, halfWidth * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (ghostState.nitro) {
+      ctx.globalAlpha = alpha * 0.9;
+      const tailLength = 80;
+      const gradient = ctx.createLinearGradient(-wheelBase * 0.7, 0, -wheelBase * 0.7 - tailLength, 0);
+      gradient.addColorStop(0, '#ffffff');
+      gradient.addColorStop(0.2, '#ff00ff');
+      gradient.addColorStop(0.6, 'rgba(255, 0, 255, 0.4)');
+      gradient.addColorStop(1, 'transparent');
+      
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#ff00ff';
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(-wheelBase * 0.5, -halfWidth * 0.6);
+      ctx.lineTo(-wheelBase * 0.7 - tailLength, 0);
+      ctx.lineTo(-wheelBase * 0.5, halfWidth * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawGhostTrail(trajectoryFrames, color = '#ff00ff', alpha = 0.35) {
+    if (!trajectoryFrames || trajectoryFrames.length < 2) return;
+    
+    const ctx = this.ctx;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = color;
+    
+    ctx.beginPath();
+    ctx.moveTo(trajectoryFrames[0].x, trajectoryFrames[0].y);
+    for (let i = 1; i < trajectoryFrames.length; i++) {
+      ctx.lineTo(trajectoryFrames[i].x, trajectoryFrames[i].y);
+    }
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawSpeedHeatmapTrail(trajectoryFrames, alpha = 0.6) {
+    if (!trajectoryFrames || trajectoryFrames.length < 3) return;
+
+    const ctx = this.ctx;
+    
+    ctx.save();
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 8;
+
+    let maxSpeed = 0;
+    let minSpeed = Infinity;
+    for (let i = 0; i < trajectoryFrames.length; i++) {
+      const speed = trajectoryFrames[i].speed || 0;
+      if (speed > maxSpeed) maxSpeed = speed;
+      if (speed < minSpeed && speed > 10) minSpeed = speed;
+    }
+    if (maxSpeed === 0) maxSpeed = 1;
+    if (minSpeed === Infinity || minSpeed >= maxSpeed) minSpeed = maxSpeed * 0.3;
+
+    for (let i = 1; i < trajectoryFrames.length; i++) {
+      const prev = trajectoryFrames[i - 1];
+      const curr = trajectoryFrames[i];
+      const speed = curr.speed || 0;
+      const speedRatio = Math.max(0, Math.min(1, (speed - minSpeed) / (maxSpeed - minSpeed)));
+
+      let color;
+      if (speedRatio < 0.33) {
+        const t = speedRatio / 0.33;
+        color = `rgba(255, ${Math.floor(100 + t * 155)}, 0, ${alpha})`;
+      } else if (speedRatio < 0.66) {
+        const t = (speedRatio - 0.33) / 0.33;
+        color = `rgba(${Math.floor(255 - t * 255)}, 255, 0, ${alpha})`;
+      } else {
+        const t = (speedRatio - 0.66) / 0.34;
+        color = `rgba(0, 255, ${Math.floor(t * 255)}, ${alpha})`;
+      }
+
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(curr.x, curr.y);
+      ctx.stroke();
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  drawDualTrajectoryComparison(bestTrajectory, currentTrajectory, centerX, centerY, size = 200) {
+    if (!bestTrajectory || bestTrajectory.length < 2) return;
+
+    const ctx = this.ctx;
+    
+    ctx.save();
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < bestTrajectory.length; i++) {
+      minX = Math.min(minX, bestTrajectory[i].x);
+      minY = Math.min(minY, bestTrajectory[i].y);
+      maxX = Math.max(maxX, bestTrajectory[i].x);
+      maxY = Math.max(maxY, bestTrajectory[i].y);
+    }
+
+    const trackWidth = maxX - minX;
+    const trackHeight = maxY - minY;
+    const scale = Math.min(size / trackWidth, size / trackHeight) * 0.9;
+    const offsetX = centerX - (trackWidth * scale) / 2 - minX * scale;
+    const offsetY = centerY - (trackHeight * scale) / 2 - minY * scale;
+
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(centerX - size / 2 - 10, centerY - size / 2 - 10, size + 20, size + 20, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#ff00ff';
+    ctx.strokeRect(centerX - size / 2 - 10, centerY - size / 2 - 10, size + 20, size + 20);
+    ctx.shadowBlur = 0;
+
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.moveTo(bestTrajectory[0].x * scale + offsetX, bestTrajectory[0].y * scale + offsetY);
+    for (let i = 1; i < bestTrajectory.length; i++) {
+      ctx.lineTo(bestTrajectory[i].x * scale + offsetX, bestTrajectory[i].y * scale + offsetY);
+    }
+    ctx.stroke();
+
+    if (currentTrajectory && currentTrajectory.length > 1) {
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = '#00f5ff';
+      ctx.shadowColor = '#00f5ff';
+      ctx.beginPath();
+      ctx.moveTo(currentTrajectory[0].x * scale + offsetX, currentTrajectory[0].y * scale + offsetY);
+      for (let i = 1; i < currentTrajectory.length; i++) {
+        ctx.lineTo(currentTrajectory[i].x * scale + offsetX, currentTrajectory[i].y * scale + offsetY);
+      }
+      ctx.stroke();
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('● 最佳路线', centerX - size / 2 + 5, centerY - size / 2 + 15);
+    
+    if (currentTrajectory && currentTrajectory.length > 1) {
+      ctx.fillStyle = '#00f5ff';
+      ctx.fillText('● 当前路线', centerX - size / 2 + 5, centerY - size / 2 + 28);
+    }
+
+    ctx.fillStyle = '#888';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('路线对比', centerX, centerY + size / 2 + 5);
+
+    ctx.restore();
+  }
+
+  drawCurrentLapTrail(trajectoryFrames, alpha = 0.5) {
+    if (!trajectoryFrames || trajectoryFrames.length < 2) return;
+    
+    const ctx = this.ctx;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    
+    const gradient = ctx.createLinearGradient(
+      trajectoryFrames[0].x, trajectoryFrames[0].y,
+      trajectoryFrames[trajectoryFrames.length - 1].x, trajectoryFrames[trajectoryFrames.length - 1].y
+    );
+    gradient.addColorStop(0, 'rgba(0, 245, 255, 0.1)');
+    gradient.addColorStop(1, 'rgba(0, 245, 255, 0.6)');
+    
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#00f5ff';
+    
+    ctx.beginPath();
+    ctx.moveTo(trajectoryFrames[0].x, trajectoryFrames[0].y);
+    for (let i = 1; i < trajectoryFrames.length; i++) {
+      ctx.lineTo(trajectoryFrames[i].x, trajectoryFrames[i].y);
+    }
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawGhostHUD(game) {
+    if (!game.ghostReplay || !game.ghostReplay.hasBestLapGhost()) return;
+    
+    const ctx = this.ctx;
+    const isPortrait = this.isPortrait();
+    const uiScale = this._getUIScale();
+    const padding = isPortrait ? 12 : 20;
+    
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    const ghostVisible = game.ghostReplay.isGhostVisible();
+    const trailVisible = game.ghostReplay.isGhostTrailVisible();
+    const bestLapTime = game.ghostReplay.getBestLapTime();
+    
+    const panelX = isPortrait ? padding : this.width - padding - 200;
+    const panelY = isPortrait ? padding + 180 * uiScale : padding + 120;
+    const panelW = isPortrait ? 140 * uiScale : 180;
+    const panelH = isPortrait ? 70 * uiScale : 65;
+    
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.7)';
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    const titleSize = isPortrait ? 12 * uiScale : 13;
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText('👻 最佳圈速', panelX + 12, panelY + 20);
+    ctx.shadowBlur = 0;
+    
+    const timeSize = isPortrait ? 18 * uiScale : 18;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${timeSize}px monospace`;
+    ctx.fillText(Utils.formatTime(bestLapTime), panelX + 12, panelY + 45);
+    
+    const statusSize = isPortrait ? 10 * uiScale : 11;
+    ctx.font = `${statusSize}px monospace`;
+    ctx.fillStyle = ghostVisible ? '#00ff66' : '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText(ghostVisible ? '幽灵: 开' : '幽灵: 关', panelX + panelW - 12, panelY + 20);
+    
+    ctx.fillStyle = trailVisible ? '#00ff66' : '#666';
+    ctx.fillText(trailVisible ? '轨迹: 开' : '轨迹: 关', panelX + panelW - 12, panelY + 38);
+    
+    if (game.player && game.player.lap > 0) {
+      const timeDelta = game.ghostReplay.getTimeDelta(game.player.raceTime % bestLapTime);
+      const deltaSize = isPortrait ? 12 * uiScale : 12;
+      ctx.font = `bold ${deltaSize}px monospace`;
+      ctx.textAlign = 'right';
+      
+      if (timeDelta > 0) {
+        ctx.fillStyle = '#ff6600';
+        ctx.fillText(`+${(timeDelta / 1000).toFixed(2)}s`, panelX + panelW - 12, panelY + panelH - 10);
+      } else if (timeDelta < 0) {
+        ctx.fillStyle = '#00ff66';
+        ctx.fillText(`${(timeDelta / 1000).toFixed(2)}s`, panelX + panelW - 12, panelY + panelH - 10);
+      }
+    }
+    
+    ctx.restore();
+  }
+
   drawParticles(bikes) {
     const ctx = this.ctx;
 
@@ -1148,6 +1467,10 @@ class Renderer {
 
     if (game._isWantedMode && game.wantedSystem && game.wantedSystem.getState() !== WantedState.IDLE) {
       this.drawWantedHUD(game);
+    }
+
+    if (game.ghostReplay && game.ghostReplay.hasBestLapGhost() && !game._ghostReplayMode) {
+      this.drawGhostHUD(game);
     }
 
     ctx.restore();
@@ -2982,7 +3305,12 @@ class Renderer {
       : 0;
     const rewardHeight = game.quickRaceReward && game.quickRaceReward.coinsEarned > 0 ? 70 : 0;
     const configHeight = 55;
-    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight;
+    const ghostComparisonHeight = game.ghostReplay && game.ghostReplay.hasBestLapGhost() ? 140 : 0;
+    const trajectoryCompareHeight = game.ghostReplay && game.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const segmentAnalysisHeight = game.ghostReplay && game.ghostReplay.hasBestLapGhost() ? 180 : 0;
+    const suggestionsHeight = this._getSuggestionsHeight(game);
+    const replayEntryHeight = 60;
+    const panelHeight = 525 + lapListHeight + recordBannerHeight + obstacleStatsHeight + achievementHeight + rewardHeight + configHeight + ghostComparisonHeight + trajectoryCompareHeight + segmentAnalysisHeight + suggestionsHeight + replayEntryHeight;
     const panelX = (this.width - panelWidth) / 2;
     const panelY = (this.height - panelHeight) / 2;
 
@@ -3352,6 +3680,170 @@ class Renderer {
       ctx.textAlign = 'left';
     }
 
+    if (game.ghostReplay && game.ghostReplay.hasBestLapGhost()) {
+      infoY += 20;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 20;
+
+      ctx.fillStyle = '#ff00ff';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ff00ff';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('👻 幽灵对比', panelX + 30, infoY);
+      ctx.shadowBlur = 0;
+      infoY += 25;
+
+      const bestLapTime = game.ghostReplay.getBestLapTime();
+      const playerBestLap = player.bestLapTime < Infinity ? player.bestLapTime : bestLapTime;
+      const timeDiff = playerBestLap - bestLapTime;
+
+      ctx.fillStyle = '#888';
+      ctx.font = '13px monospace';
+      ctx.fillText('历史最佳圈速:', panelX + 45, infoY);
+      ctx.fillStyle = '#ff00ff';
+      ctx.textAlign = 'right';
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = '#ff00ff';
+      ctx.fillText(Utils.formatTime(bestLapTime), panelX + panelWidth - 30, infoY);
+      ctx.shadowBlur = 0;
+      infoY += 22;
+
+      ctx.fillStyle = '#888';
+      ctx.textAlign = 'left';
+      ctx.fillText('本次最佳圈速:', panelX + 45, infoY);
+      ctx.fillStyle = playerBestLap <= bestLapTime ? '#00ff66' : '#ffffff';
+      ctx.textAlign = 'right';
+      if (playerBestLap <= bestLapTime) {
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#00ff66';
+      }
+      ctx.fillText(Utils.formatTime(playerBestLap), panelX + panelWidth - 30, infoY);
+      ctx.shadowBlur = 0;
+      infoY += 22;
+
+      ctx.fillStyle = '#888';
+      ctx.textAlign = 'left';
+      ctx.fillText('差距:', panelX + 45, infoY);
+      if (timeDiff > 0) {
+        ctx.fillStyle = '#ff6600';
+        ctx.textAlign = 'right';
+        ctx.fillText(`+${Utils.formatTime(timeDiff)}`, panelX + panelWidth - 30, infoY);
+      } else if (timeDiff < 0) {
+        ctx.fillStyle = '#00ff66';
+        ctx.textAlign = 'right';
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#00ff66';
+        ctx.fillText(`-${Utils.formatTime(Math.abs(timeDiff))} (新纪录!)`, panelX + panelWidth - 30, infoY);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = '#ffff00';
+        ctx.textAlign = 'right';
+        ctx.fillText('持平', panelX + panelWidth - 30, infoY);
+      }
+      infoY += 25;
+    }
+
+    if (game.ghostReplay && game.ghostReplay.hasBestLapGhost()) {
+      infoY += 15;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 20;
+
+      ctx.fillStyle = '#ff00ff';
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#ff00ff';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🗺️ 最佳路线对照', panelX + panelWidth / 2, infoY);
+      ctx.shadowBlur = 0;
+      infoY += 20;
+
+      const bestTrajectory = game.ghostReplay.getBestLapTrajectory();
+      const currentTrajectory = game.ghostReplay.getCurrentRaceLine();
+      if (bestTrajectory && bestTrajectory.length > 2) {
+        const mapSize = 130;
+        const mapX = panelX + panelWidth / 2;
+        const mapY = infoY + mapSize / 2 + 5;
+        this.drawDualTrajectoryComparison(bestTrajectory, currentTrajectory, mapX, mapY, mapSize);
+      }
+      infoY += 150;
+    }
+
+    if (game.ghostReplay && game.ghostReplay.hasBestLapGhost()) {
+      infoY += 15;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 20;
+
+      infoY = this._drawSegmentAnalysis(game, panelX, infoY);
+    }
+
+    if (game.ghostReplay && game.ghostReplay.hasBestLapGhost()) {
+      infoY += 10;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(panelX + 30, infoY);
+      ctx.lineTo(panelX + panelWidth - 30, infoY);
+      ctx.stroke();
+      infoY += 15;
+
+      infoY = this._drawSuggestions(game, panelX, infoY);
+    }
+
+    infoY += 10;
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 30, infoY);
+    ctx.lineTo(panelX + panelWidth - 30, infoY);
+    ctx.stroke();
+    infoY += 15;
+
+    const replayBtnY = infoY + 10;
+    const replayBtnW = 200;
+    const replayBtnH = 40;
+    const replayBtnX = (this.width - replayBtnW) / 2;
+
+    const btnHover = game._replayBtnHover || false;
+    const btnGlow = btnHover ? 15 : 8;
+    ctx.shadowBlur = btnGlow;
+    ctx.shadowColor = '#ff00ff';
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = btnHover ? 'rgba(255, 0, 255, 0.2)' : 'rgba(20, 20, 40, 0.8)';
+    ctx.beginPath();
+    ctx.roundRect(replayBtnX, replayBtnY, replayBtnW, replayBtnH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#ff00ff';
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('🎬 观看最佳圈速回放', this.width / 2, replayBtnY + 26);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#888';
+    ctx.font = '11px monospace';
+    ctx.fillText('按 R 键回放', this.width / 2, replayBtnY + replayBtnH + 15);
+
     ctx.fillStyle = '#00f5ff';
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#00f5ff';
@@ -3361,6 +3853,201 @@ class Renderer {
     ctx.shadowBlur = 0;
 
     ctx.restore();
+  }
+
+  drawGhostReplayOverlay(game) {
+    const ctx = this.ctx;
+    const uiScale = this._getUIScale();
+    const isPortrait = this.isPortrait();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const ghostReplay = game.ghostReplay;
+    if (!ghostReplay) {
+      ctx.restore();
+      return;
+    }
+
+    const panelW = isPortrait ? Math.min(320 * uiScale, this.width * 0.85) : 400;
+    const panelH = isPortrait ? 180 * uiScale : 160;
+    const panelX = (this.width - panelW) / 2;
+    const panelY = isPortrait ? 20 * uiScale : 20;
+
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.9)';
+    ctx.strokeStyle = '#ff00ff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const titleSize = isPortrait ? 18 * uiScale : 20;
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#ff00ff';
+    ctx.font = `bold ${titleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('👻 最佳圈速回放', this.width / 2, panelY + 35);
+    ctx.shadowBlur = 0;
+
+    const bestLapTime = ghostReplay.getBestLapTime();
+    const progress = ghostReplay.getReplayProgress();
+    const currentTime = bestLapTime * progress;
+
+    const timeSize = isPortrait ? 24 * uiScale : 28;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${timeSize}px monospace`;
+    ctx.fillText(Utils.formatTime(currentTime), this.width / 2, panelY + 75);
+
+    const totalTimeY = panelY + 95;
+    ctx.fillStyle = '#888';
+    ctx.font = `12px monospace`;
+    ctx.fillText(`/ ${Utils.formatTime(bestLapTime)}`, this.width / 2, totalTimeY);
+
+    const barX = panelX + 20;
+    const barW = panelW - 40;
+    const barH = 6;
+    const barY = panelY + 110;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    const progressW = barW * progress;
+    const progressGrad = ctx.createLinearGradient(barX, barY, barX + progressW, barY);
+    progressGrad.addColorStop(0, '#ff00ff');
+    progressGrad.addColorStop(1, '#ff66ff');
+    ctx.fillStyle = progressGrad;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#ff00ff';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, progressW, barH, 3);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    const controlsY = panelY + 135;
+    ctx.fillStyle = '#888';
+    ctx.font = `11px monospace`;
+    ctx.fillText('R 重新播放  |  空格 暂停/继续  |  ESC 退出', this.width / 2, controlsY);
+
+    if (ghostReplay.isReplayPaused) {
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffff00';
+      ctx.font = `bold ${14}px monospace`;
+      ctx.fillText('⏸ 已暂停', this.width / 2, panelY + 155);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }
+
+  _getSuggestionsHeight(game) {
+    if (!game.ghostReplay || !game.ghostReplay.hasBestLapGhost()) return 0;
+    const analysis = game.ghostReplay.getAnalysisSummary();
+    if (!analysis || !analysis.suggestions || analysis.suggestions.length === 0) return 0;
+    return 60 + analysis.suggestions.length * 28;
+  }
+
+  _drawSegmentAnalysis(game, panelX, infoY) {
+    if (!game.ghostReplay || !game.ghostReplay.hasBestLapGhost()) return infoY;
+
+    const ctx = this.ctx;
+    const detailed = game.ghostReplay.getDetailedComparison();
+    if (!detailed || !detailed.segments || detailed.segments.length === 0) return infoY;
+
+    ctx.fillStyle = '#ff00ff';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#ff00ff';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('📊 赛段分析', panelX + 30, infoY);
+    ctx.shadowBlur = 0;
+    infoY += 22;
+
+    detailed.segments.forEach((seg, i) => {
+      const segY = infoY + i * 28;
+      
+      ctx.fillStyle = '#888';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(seg.segmentName, panelX + 45, segY);
+
+      const statusColor = seg.status === 'fast' ? '#00ff66' : (seg.status === 'slow' ? '#ff6600' : '#ffff00');
+      const statusText = seg.status === 'fast' ? '快' : (seg.status === 'slow' ? '慢' : '平');
+      ctx.fillStyle = statusColor;
+      ctx.textAlign = 'center';
+      ctx.fillText(statusText, panelX + 150, segY);
+
+      const diffText = seg.timeDiff > 0 
+        ? `+${Utils.formatTime(seg.timeDiff)}` 
+        : (seg.timeDiff < 0 ? Utils.formatTime(seg.timeDiff) : '0.00');
+      ctx.fillStyle = seg.timeDiff > 0 ? '#ff6600' : (seg.timeDiff < 0 ? '#00ff66' : '#aaa');
+      ctx.textAlign = 'right';
+      ctx.fillText(diffText, panelX + 330, segY);
+    });
+
+    return infoY + detailed.segments.length * 28 + 10;
+  }
+
+  _drawSuggestions(game, panelX, infoY) {
+    if (!game.ghostReplay || !game.ghostReplay.hasBestLapGhost()) return infoY;
+
+    const ctx = this.ctx;
+    const analysis = game.ghostReplay.getAnalysisSummary();
+    if (!analysis || !analysis.suggestions || analysis.suggestions.length === 0) return infoY;
+
+    ctx.fillStyle = '#00f5ff';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#00f5ff';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('💡 改进建议', panelX + 30, infoY);
+    ctx.shadowBlur = 0;
+    infoY += 22;
+
+    analysis.suggestions.forEach((sug, i) => {
+      const sugY = infoY + i * 28;
+      
+      let icon = '•';
+      let color = '#888';
+      if (sug.priority === 'high') {
+        icon = '🔴';
+        color = '#ff6600';
+      } else if (sug.priority === 'medium') {
+        icon = '🟡';
+        color = '#ffff00';
+      } else if (sug.priority === 'low') {
+        icon = '🟢';
+        color = '#00ff66';
+      } else if (sug.type === 'positive') {
+        icon = '✨';
+        color = '#00ff66';
+      }
+
+      ctx.fillStyle = color;
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'left';
+      
+      const text = sug.text;
+      const maxChars = 38;
+      if (text.length <= maxChars) {
+        ctx.fillText(`${icon} ${text}`, panelX + 45, sugY);
+      } else {
+        const line1 = text.substring(0, maxChars);
+        const line2 = text.substring(maxChars);
+        ctx.fillText(`${icon} ${line1}`, panelX + 45, sugY);
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`  ${line2}`, panelX + 45, sugY + 18);
+      }
+    });
+
+    return infoY + analysis.suggestions.length * 28 + 10;
   }
 
   drawWantedResult(game) {

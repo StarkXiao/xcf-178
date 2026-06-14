@@ -21,6 +21,11 @@ const Utils = {
     return this.normalizeAngle(angle1 - angle2);
   },
 
+  lerpAngle(a, b, t) {
+    const diff = this.angleDifference(b, a);
+    return a + diff * t;
+  },
+
   randomRange(min, max) {
     return Math.random() * (max - min) + min;
   },
