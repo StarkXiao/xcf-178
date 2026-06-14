@@ -1217,7 +1217,7 @@ class Renderer {
     ctx.fillText(trailVisible ? '轨迹: 开' : '轨迹: 关', panelX + panelW - 12, panelY + 38);
     
     if (game.player && game.player.lap > 0) {
-      const timeDelta = game.ghostReplay.getTimeDelta(game.player.raceTime % bestLapTime);
+      const timeDelta = game.ghostReplay.getTimeDelta(game.player.raceTime);
       const deltaSize = isPortrait ? 12 * uiScale : 12;
       ctx.font = `bold ${deltaSize}px monospace`;
       ctx.textAlign = 'right';

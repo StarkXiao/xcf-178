@@ -493,8 +493,12 @@ class GhostReplay {
     this.lastRecordTime = 0;
     this.recordInterval = 33;
     
+    this._lapStartTime = 0;
+    
     this.isReplayMode = false;
     this.replayLapIndex = 0;
+    
+    this.isReplayPaused = false;
     
     this._loadBestLapGhost();
   }
@@ -505,9 +509,24 @@ class GhostReplay {
       const data = localStorage.getItem(key);
       if (data) {
         this.bestLapGhost = JSON.parse(data);
+        this._normalizeBestLapGhostFrames();
       }
     } catch (e) {
       console.error('加载最佳圈速幽灵失败:', e);
+    }
+  }
+
+  _normalizeBestLapGhostFrames() {
+    if (!this.bestLapGhost || !this.bestLapGhost.frames || this.bestLapGhost.frames.length === 0) return;
+    
+    const frames = this.bestLapGhost.frames;
+    const firstFrameTime = frames[0].t;
+    
+    if (firstFrameTime > 100) {
+      for (let i = 0; i < frames.length; i++) {
+        frames[i].t = frames[i].t - firstFrameTime;
+      }
+      this._saveBestLapGhost();
     }
   }
 
@@ -531,6 +550,7 @@ class GhostReplay {
     this.currentLapTrajectory = [];
     this.lapTrajectories = [];
     this.lastRecordTime = 0;
+    this._lapStartTime = 0;
     this.state = GhostState.RACING;
     this.currentGhostFrameIndex = 0;
     this.ghostLapTime = 0;
@@ -543,8 +563,10 @@ class GhostReplay {
     if (this.lastRecordTime < this.recordInterval) return;
     this.lastRecordTime = 0;
     
+    const lapTime = playerBike.raceTime - this._lapStartTime;
+    
     const frame = {
-      t: playerBike.raceTime,
+      t: lapTime,
       x: playerBike.x,
       y: playerBike.y,
       angle: playerBike.angle,
@@ -578,6 +600,7 @@ class GhostReplay {
       this.game.isNewBestLapGhost = true;
     }
     
+    this._lapStartTime = this._lapStartTime + lapTime;
     this.currentLapTrajectory = [];
     this.currentGhostFrameIndex = 0;
     this.ghostLapTime = 0;
@@ -589,7 +612,7 @@ class GhostReplay {
     
     if (playerLap < 1) return null;
     
-    this.ghostLapTime += dt * 1000;
+    this.ghostLapTime = Math.max(0, playerRaceTime - this._lapStartTime);
     
     const frames = this.bestLapGhost.frames;
     if (frames.length < 2) return null;
@@ -653,8 +676,9 @@ class GhostReplay {
 
   getTimeDelta(playerRaceTime) {
     if (!this.bestLapGhost) return 0;
+    const playerLapTime = Math.max(0, playerRaceTime - this._lapStartTime);
     const ghostTime = this.ghostLapTime;
-    return playerRaceTime - ghostTime;
+    return playerLapTime - ghostTime;
   }
 
   hasBestLapGhost() {
